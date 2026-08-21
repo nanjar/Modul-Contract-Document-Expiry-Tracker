@@ -1,19 +1,21 @@
 import { BadRequestException, Controller, Get, Param, Post, Req, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles, RolesGuard } from '../auth/roles.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 
 @ApiTags('document-files')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('documents')
 export class DocumentFilesController {
   constructor(private readonly prisma: PrismaService, private readonly storage: StorageService) {}
-
   @Post(':id/file')
+  @Roles(Role.SUPERUSER, Role.EDITOR)
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } }, required: ['file'] } })
@@ -27,7 +29,6 @@ export class DocumentFilesController {
     if (!doc || doc.archivedAt) throw new BadRequestException('Document not found or archived');
     return this.storage.upload(id, req.user.sub, file);
   }
-
   @Get(':id/file')
   async download(@Param('id') id: string, @Res() res: Response) {
     const doc = await this.prisma.document.findUnique({ where: { id } });
