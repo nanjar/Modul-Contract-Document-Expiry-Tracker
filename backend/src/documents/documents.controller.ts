@@ -1,23 +1,22 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { IsISO8601, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsISO8601, IsOptional, IsString, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../auth/roles.guard';
 import { DocumentsService } from './documents.service';
 
 class CreateDocumentDto {
-  @IsString()
-  @MinLength(2)
-  title!: string;
+  @IsString() @MinLength(2) title!: string;
+  @IsString() @MinLength(2) documentType!: string;
+  @IsOptional() @IsISO8601() expiryDate?: string | null;
+}
 
-  @IsString()
-  @MinLength(2)
-  documentType!: string;
-
-  @IsOptional()
-  @IsISO8601()
-  expiryDate?: string | null;
+class UpdateDocumentDto {
+  @IsOptional() @IsString() @MinLength(2) title?: string;
+  @IsOptional() @IsString() @MinLength(2) documentType?: string;
+  @IsOptional() @IsISO8601() expiryDate?: string | null;
+  @IsOptional() @IsBoolean() reminderEnabled?: boolean;
 }
 
 @ApiTags('documents')
@@ -26,16 +25,9 @@ class CreateDocumentDto {
 @Controller('documents')
 export class DocumentsController {
   constructor(private readonly documents: DocumentsService) {}
-
-  @Get()
-  list() { return this.documents.list(); }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) { return this.documents.findOne(id); }
-
-  @Post()
-  @Roles(Role.SUPERUSER, Role.EDITOR)
-  create(@Body() body: CreateDocumentDto, @Req() req: { user: { sub: string } }) {
-    return this.documents.create({ ...body, createdById: req.user.sub });
-  }
+  @Get() list() { return this.documents.list(); }
+  @Get(':id') findOne(@Param('id') id: string) { return this.documents.findOne(id); }
+  @Post() @Roles(Role.SUPERUSER, Role.EDITOR) create(@Body() body: CreateDocumentDto, @Req() req: { user: { sub: string } }) { return this.documents.create({ ...body, createdById: req.user.sub }); }
+  @Patch(':id') @Roles(Role.SUPERUSER, Role.EDITOR) update(@Param('id') id: string, @Body() body: UpdateDocumentDto, @Req() req: { user: { sub: string } }) { return this.documents.update(id, body, req.user.sub); }
+  @Post(':id/archive') @Roles(Role.SUPERUSER, Role.EDITOR) archive(@Param('id') id: string, @Req() req: { user: { sub: string } }) { return this.documents.archive(id, req.user.sub); }
 }
