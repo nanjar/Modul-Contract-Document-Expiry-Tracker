@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
 import { IsISO8601, IsOptional, IsString, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles, RolesGuard } from '../auth/roles.guard';
 import { DocumentsService } from './documents.service';
 
 class CreateDocumentDto {
@@ -20,7 +22,7 @@ class CreateDocumentDto {
 
 @ApiTags('documents')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('documents')
 export class DocumentsController {
   constructor(private readonly documents: DocumentsService) {}
@@ -32,6 +34,7 @@ export class DocumentsController {
   findOne(@Param('id') id: string) { return this.documents.findOne(id); }
 
   @Post()
+  @Roles(Role.SUPERUSER, Role.EDITOR)
   create(@Body() body: CreateDocumentDto, @Req() req: { user: { sub: string } }) {
     return this.documents.create({ ...body, createdById: req.user.sub });
   }
