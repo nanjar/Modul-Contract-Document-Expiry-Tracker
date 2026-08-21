@@ -1,37 +1,39 @@
-const metrics = [
-  ['Total Documents', '0'],
-  ['Active', '0'],
-  ['Expiring Soon', '0'],
-  ['Expired', '0'],
-];
+'use client';
+
+import { FormEvent, useEffect, useState } from 'react';
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+type Summary = { total: number; active: number; expiringSoon: number; expired: number; noExpiry: number };
+type DocumentItem = { id: string; title: string; documentType: string; expiryDate: string | null; status: string };
 
 export default function Home() {
-  return (
-    <main style={{ minHeight: '100vh', padding: '48px clamp(20px, 5vw, 72px)' }}>
-      <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', gap: 24, alignItems: 'flex-end', marginBottom: 40 }}>
-          <div>
-            <div style={{ color: 'var(--accent)', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', fontSize: 12 }}>Expiry Tracker</div>
-            <h1 style={{ fontSize: 'clamp(28px, 4vw, 40px)', margin: '10px 0 8px', letterSpacing: '-.03em' }}>Good evening.</h1>
-            <p style={{ margin: 0, color: 'var(--muted)' }}>Keep every important document ahead of its expiry date.</p>
-          </div>
-          <button style={{ border: 0, borderRadius: 10, padding: '12px 18px', background: 'var(--text)', color: 'white', fontWeight: 650, cursor: 'pointer' }}>+ Add Document</button>
-        </header>
+  const [token, setToken] = useState<string | null>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
 
-        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 28 }}>
-          {metrics.map(([label, value]) => (
-            <div key={label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 20 }}>
-              <div style={{ color: 'var(--muted)', fontSize: 13 }}>{label}</div>
-              <div style={{ fontSize: 30, fontWeight: 700, marginTop: 8 }}>{value}</div>
-            </div>
-          ))}
-        </section>
+  useEffect(() => { setToken(localStorage.getItem('expiry_token')); }, []);
+  useEffect(() => {
+    if (!token) return;
+    Promise.all([
+      fetch(`${API}/dashboard/summary`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+      fetch(`${API}/documents`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+    ]).then(([s, d]) => { setSummary(s); setDocuments(Array.isArray(d) ? d : []); });
+  }, [token]);
 
-        <section style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 28 }}>
-          <h2 style={{ margin: 0, fontSize: 19 }}>Documents requiring attention</h2>
-          <p style={{ color: 'var(--muted)', marginBottom: 0 }}>No documents yet. Add your first document to start tracking expiry dates.</p>
-        </section>
-      </div>
-    </main>
+  async function login(event: FormEvent) {
+    event.preventDefault(); setError('');
+    const response = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+    if (!response.ok) { setError('Unable to sign in. Check your credentials.'); return; }
+    const data = await response.json(); localStorage.setItem('expiry_token', data.accessToken); setToken(data.accessToken);
+  }
+
+  if (!token) return (
+    <main className="auth-shell"><section className="auth-card"><div className="eyebrow">EXPIRY TRACKER</div><h1>Stay ahead of every expiry.</h1><p>One calm place for contracts, licenses, certificates and other important documents.</p><form onSubmit={login}><label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label><label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} /></label>{error && <div className="error">{error}</div>}<button className="primary">Sign in</button></form></section></main>
   );
+
+  const cards = [['Total Documents', summary?.total ?? 0], ['Active', summary?.active ?? 0], ['Expiring Soon', summary?.expiringSoon ?? 0], ['Expired', summary?.expired ?? 0]];
+  return <main className="shell"><header className="topbar"><div><div className="eyebrow">EXPIRY TRACKER</div><h1>Good evening.</h1><p>Keep every important document ahead of its expiry date.</p></div><button className="secondary" onClick={() => { localStorage.removeItem('expiry_token'); setToken(null); }}>Sign out</button></header><section className="metrics">{cards.map(([label, value]) => <article key={String(label)}><span>{label}</span><strong>{value}</strong></article>)}</section><section className="panel"><div className="panel-head"><div><h2>Documents requiring attention</h2><p>Prioritized by expiry date.</p></div></div>{documents.length === 0 ? <div className="empty"><strong>No documents yet.</strong><span>Add your first document to start tracking expiry dates.</span></div> : <div className="table">{documents.slice(0, 10).map((doc) => <div className="row" key={doc.id}><div><strong>{doc.title}</strong><span>{doc.documentType}</span></div><div className={`status ${doc.status.toLowerCase()}`}>{doc.status.replace('_', ' ')}</div><div>{doc.expiryDate ? new Date(doc.expiryDate).toLocaleDateString() : 'No expiry'}</div></div>)}</div>}</section></main>;
 }
