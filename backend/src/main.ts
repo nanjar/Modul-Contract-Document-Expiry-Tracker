@@ -1,21 +1,2 @@
-import { ValidationPipe } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { AppModule } from './app.module';
-
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.setGlobalPrefix('api/v1');
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-
-  const config = new DocumentBuilder()
-    .setTitle('Contract & Document Expiry Tracker API')
-    .setDescription('REST API for contract and document expiry tracking')
-    .setVersion('0.1.0')
-    .addBearerAuth()
-    .build();
-  SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
-
-  await app.listen(process.env.PORT ?? 3001);
-}
-bootstrap();
+import { ValidationPipe } from '@nestjs/common'; import { NestFactory } from '@nestjs/core'; import { DocumentBuilder,SwaggerModule } from '@nestjs/swagger'; import { AppModule } from './app.module';
+async function bootstrap(){const app=await NestFactory.create(AppModule);app.setGlobalPrefix('api/v1');app.enableCors({origin:(process.env.CORS_ORIGIN??'http://localhost:3000').split(',').map(v=>v.trim()),credentials:true});app.useGlobalPipes(new ValidationPipe({whitelist:true,transform:true,forbidNonWhitelisted:true}));const config=new DocumentBuilder().setTitle('Contract & Document Expiry Tracker API').setDescription('REST API for contract and document expiry tracking').setVersion('0.1.0').addBearerAuth().build();SwaggerModule.setup('docs',app,SwaggerModule.createDocument(app,config));await app.listen(process.env.PORT??3001)}bootstrap();
