@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPERUSER
+  EDITOR
+  VIEWER
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(VIEWER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  documents    Document[] @relation("DocumentOwner")
+  createdDocs  Document[] @relation("DocumentCreator")
+  audits       AuditLog[]
+}
+
+model Document {
+  id               String    @id @default(uuid()) @db.Uuid
+  documentNumber   String?
+  title            String
+  documentType     String
+  description      String?
+  counterparty     String?
+  ownerId          String?   @db.Uuid
+  issueDate        DateTime?
+  effectiveDate    DateTime?
+  expiryDate       DateTime?
+  reminderEnabled  Boolean   @default(true)
+  storageKey       String?
+  originalFilename String?
+  mimeType         String?
+  fileSize         BigInt?
+  createdById      String    @db.Uuid
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  archivedAt       DateTime?
+  archivedById     String?   @db.Uuid
+
+  owner       User?      @relation("DocumentOwner", fields: [ownerId], references: [id])
+  createdBy   User       @relation("DocumentCreator", fields: [createdById], references: [id])
+  reminders   Reminder[]
+  audits      AuditLog[]
+
+  @@index([expiryDate])
+  @@index([documentType])
+  @@index([archivedAt])
+}
+
+model Reminder {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @db.Uuid
+  daysBefore Int
+  enabled    Boolean  @default(true)
+  lastSentAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  @@unique([documentId, daysBefore])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @db.Uuid
+  action     String
+  entity     String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  actor    User?     @relation(fields: [actorId], references: [id])
+  document Document? @relation(fields: [entityId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
