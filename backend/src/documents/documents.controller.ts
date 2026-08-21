@@ -1,32 +1,38 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { IsISO8601, IsOptional, IsString, MinLength } from 'class-validator';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DocumentsService } from './documents.service';
 
+class CreateDocumentDto {
+  @IsString()
+  @MinLength(2)
+  title!: string;
+
+  @IsString()
+  @MinLength(2)
+  documentType!: string;
+
+  @IsOptional()
+  @IsISO8601()
+  expiryDate?: string | null;
+}
+
 @ApiTags('documents')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('documents')
 export class DocumentsController {
   constructor(private readonly documents: DocumentsService) {}
 
   @Get()
-  list() {
-    return this.documents.list().map((document) => ({
-      ...document,
-      status: this.documents.status(document),
-    }));
-  }
+  list() { return this.documents.list(); }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    const document = this.documents.findOne(id);
-    return { ...document, status: this.documents.status(document) };
-  }
+  findOne(@Param('id') id: string) { return this.documents.findOne(id); }
 
   @Post()
-  create(@Body() body: { title: string; documentType: string; expiryDate?: string | null }) {
-    return this.documents.create({
-      title: body.title,
-      documentType: body.documentType,
-      expiryDate: body.expiryDate ?? null,
-    });
+  create(@Body() body: CreateDocumentDto, @Req() req: { user: { sub: string } }) {
+    return this.documents.create({ ...body, createdById: req.user.sub });
   }
 }
