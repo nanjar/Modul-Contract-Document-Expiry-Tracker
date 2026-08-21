@@ -1,43 +1,39 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { DocumentStatus } from './documents.types';
-
-export interface DocumentRecord {
-  id: string;
-  title: string;
-  documentType: string;
-  expiryDate: string | null;
-  archived: boolean;
-}
 
 @Injectable()
 export class DocumentsService {
-  private readonly documents: DocumentRecord[] = [];
+  constructor(private readonly prisma: PrismaService) {}
 
-  list(): DocumentRecord[] {
-    return this.documents.map((document) => ({ ...document }));
+  async list() {
+    const documents = await this.prisma.document.findMany({ orderBy: { createdAt: 'desc' } });
+    return documents.map((document) => ({ ...document, status: this.status(document) }));
   }
 
-  findOne(id: string): DocumentRecord {
-    const document = this.documents.find((item) => item.id === id);
+  async findOne(id: string) {
+    const document = await this.prisma.document.findUnique({ where: { id }, include: { reminders: true } });
     if (!document) throw new NotFoundException('Document not found');
-    return { ...document };
+    return { ...document, status: this.status(document) };
   }
 
-  create(input: Omit<DocumentRecord, 'id' | 'archived'>): DocumentRecord {
-    const document: DocumentRecord = {
-      ...input,
-      id: crypto.randomUUID(),
-      archived: false,
-    };
-    this.documents.unshift(document);
-    return { ...document };
+  async create(input: { title: string; documentType: string; expiryDate?: string | null; createdById: string }) {
+    const document = await this.prisma.document.create({
+      data: {
+        title: input.title,
+        documentType: input.documentType,
+        expiryDate: input.expiryDate ? new Date(input.expiryDate) : null,
+        createdById: input.createdById,
+      },
+    });
+    return { ...document, status: this.status(document) };
   }
 
-  status(document: DocumentRecord, warningDays = 30): DocumentStatus {
-    if (document.archived) return DocumentStatus.ARCHIVED;
+  status(document: { expiryDate: Date | null; archivedAt: Date | null }, warningDays = 30): DocumentStatus {
+    if (document.archivedAt) return DocumentStatus.ARCHIVED;
     if (!document.expiryDate) return DocumentStatus.NO_EXPIRY;
     const today = new Date();
-    const expiry = new Date(document.expiryDate);
+    const expiry = document.expiryDate;
     if (expiry < today) return DocumentStatus.EXPIRED;
     const threshold = new Date(today);
     threshold.setDate(threshold.getDate() + warningDays);
