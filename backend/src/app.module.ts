@@ -1,8 +1,2 @@
-import { Module } from '@nestjs/common';
-import { DashboardModule } from './dashboard/dashboard.module';
-import { DocumentsModule } from './documents/documents.module';
-
-@Module({
-  imports: [DashboardModule, DocumentsModule],
-})
-export class AppModule {}
+import { Module } from '@nestjs/common'; import { ConfigModule } from '@nestjs/config'; import { ThrottlerGuard,ThrottlerModule } from '@nestjs/throttler'; import { APP_GUARD } from '@nestjs/core'; import { PrismaModule } from './prisma/prisma.module'; import { AuthModule } from './auth/auth.module'; import { AuditModule } from './audit/audit.module'; import { DashboardModule } from './dashboard/dashboard.module'; import { DocumentsModule } from './documents/documents.module'; import { StorageModule } from './storage/storage.module'; import { ReminderModule } from './reminders/reminder.module'; import { UsersModule } from './users/users.module'; import { SettingsModule } from './settings/settings.module'; import { DocumentFilesController } from './documents/document-files.controller'; import { RemindersController } from './reminders/reminders.controller';
+@Module({imports:[ConfigModule.forRoot({isGlobal:true}),ThrottlerModule.forRoot([{ttl:60000,limit:120}]),PrismaModule,AuthModule,AuditModule,DashboardModule,DocumentsModule,StorageModule,ReminderModule,UsersModule,SettingsModule],controllers:[DocumentFilesController,RemindersController],providers:[{provide:APP_GUARD,useClass:ThrottlerGuard}]}) export class AppModule{}

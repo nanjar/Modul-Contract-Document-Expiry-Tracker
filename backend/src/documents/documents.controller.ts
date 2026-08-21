@@ -1,32 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
-import { DocumentsService } from './documents.service';
-
-@ApiTags('documents')
-@Controller('documents')
-export class DocumentsController {
-  constructor(private readonly documents: DocumentsService) {}
-
-  @Get()
-  list() {
-    return this.documents.list().map((document) => ({
-      ...document,
-      status: this.documents.status(document),
-    }));
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    const document = this.documents.findOne(id);
-    return { ...document, status: this.documents.status(document) };
-  }
-
-  @Post()
-  create(@Body() body: { title: string; documentType: string; expiryDate?: string | null }) {
-    return this.documents.create({
-      title: body.title,
-      documentType: body.documentType,
-      expiryDate: body.expiryDate ?? null,
-    });
-  }
-}
+import { Body,Controller,Get,Param,Patch,Post,Query,Req,UseGuards } from '@nestjs/common'; import { ApiBearerAuth,ApiTags } from '@nestjs/swagger'; import { Role } from '@prisma/client'; import { IsBoolean,IsISO8601,IsOptional,IsString,MinLength } from 'class-validator'; import { JwtAuthGuard } from '../auth/jwt-auth.guard'; import { Roles,RolesGuard } from '../auth/roles.guard'; import { DocumentsService } from './documents.service';
+class CreateDocumentDto { @IsString() @MinLength(2) title!:string; @IsString() @MinLength(2) documentType!:string; @IsOptional() @IsString() documentNumber?:string; @IsOptional() @IsString() description?:string; @IsOptional() @IsString() counterparty?:string; @IsOptional() @IsString() ownerId?:string; @IsOptional() @IsISO8601() issueDate?:string|null; @IsOptional() @IsISO8601() effectiveDate?:string|null; @IsOptional() @IsISO8601() expiryDate?:string|null; }
+class UpdateDocumentDto extends CreateDocumentDto { @IsOptional() @IsBoolean() reminderEnabled?:boolean; }
+@ApiTags('documents') @ApiBearerAuth() @UseGuards(JwtAuthGuard,RolesGuard) @Controller('documents') export class DocumentsController { constructor(private readonly documents:DocumentsService){} @Get() list(@Query() query:Record<string,string>){return this.documents.list(query)} @Get(':id') findOne(@Param('id') id:string){return this.documents.findOne(id)} @Post() @Roles(Role.SUPERUSER,Role.EDITOR) create(@Body() body:CreateDocumentDto,@Req() req:{user:{sub:string}}){return this.documents.create({...body,createdById:req.user.sub})} @Patch(':id') @Roles(Role.SUPERUSER,Role.EDITOR) update(@Param('id') id:string,@Body() body:UpdateDocumentDto,@Req() req:{user:{sub:string}}){return this.documents.update(id,body,req.user.sub)} @Post(':id/archive') @Roles(Role.SUPERUSER,Role.EDITOR) archive(@Param('id') id:string,@Req() req:{user:{sub:string}}){return this.documents.archive(id,req.user.sub)} }

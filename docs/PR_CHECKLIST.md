@@ -1,0 +1,29 @@
+# MVP Verification Checklist
+
+- [x] PRD baseline committed
+- [x] PostgreSQL/Prisma schema and migrations
+- [x] JWT + Argon2id authentication
+- [x] SUPERUSER / EDITOR / VIEWER role guard
+- [x] Persistent document create/list/detail/update/archive
+- [x] Full document metadata
+- [x] Search/filter/pagination
+- [x] Derived expiry status
+- [x] Dashboard summary/expiring/recent
+- [x] S3-compatible upload/download abstraction
+- [x] MIME/size validation and upload authorization
+- [x] Reminder configuration
+- [x] Hourly scheduler
+- [x] Idempotent/retryable notification delivery persistence
+- [x] SMTP email provider
+- [x] Users administration
+- [x] Audit log API/UI
+- [x] Persisted system settings
+- [x] Strict DTO validation
+- [x] CORS and throttling
+- [x] Responsive premium UI
+- [x] Light/dark themes
+- [x] Loading/empty/error/success states
+- [x] Role-aware administration navigation
+- [x] Backend tests in CI
+- [x] Frontend build in CI
+- [ ] Final clean-environment CI/e2e acceptance with real S3 + SMTP configuration

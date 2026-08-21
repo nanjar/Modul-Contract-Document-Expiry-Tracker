@@ -1,0 +1,2 @@
+import { Injectable } from '@nestjs/common'; import { PrismaService } from '../prisma/prisma.service';
+@Injectable() export class SettingsService { constructor(private readonly prisma:PrismaService){} async get(){const rows=await this.prisma.systemSetting.findMany();return Object.fromEntries(rows.map(r=>[r.key,r.value]));} async set(values:Record<string,string>){await this.prisma.$transaction(Object.entries(values).map(([key,value])=>this.prisma.systemSetting.upsert({where:{key},create:{key,value},update:{value}})));return this.get();} }
