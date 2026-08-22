@@ -1,23 +1,22 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useLanguage } from '../../components/LanguageProvider';
 const API=process.env.NEXT_PUBLIC_API_URL??'http://localhost:3001/api/v1';
 type Status='ACTIVE'|'EXPIRING_SOON'|'EXPIRED'|'NO_EXPIRY'|'ARCHIVED';
 type Doc={id:string;title:string;documentNumber?:string|null;documentType:string;counterparty?:string|null;expiryDate?:string|null;status:Status};
 type Role='SUPERUSER'|'EDITOR'|'VIEWER';
-type Lang='en'|'id';
 const copy={en:{back:'Command center',eyebrow:'DOCUMENTS',title:'Documents',subtitle:'One reliable place for every important business document.',add:'Add document',search:'Search title, number, counterparty…',allStatus:'All status',allTypes:'All types',newest:'Newest',oldest:'Oldest',expirySoonest:'Expiry soonest',expiryLatest:'Expiry latest',titleAZ:'Title A–Z',active:'Active',expiring:'Expiring soon',expired:'Expired',noExpiry:'No expiry',archived:'Archived',document:'Document',type:'Type',counterparty:'Counterparty',expiry:'Expiry',status:'Status',open:'Open',noNumber:'No document number',refreshing:'Refreshing…',updated:'Updated just now',page:'Page',noDocuments:'No documents found',tryFilter:'Try a different filter or add your first document.',addFirst:'Add document',sessionExpired:'Your session has expired. Please sign in again.',loadFailed:'Unable to load documents.'},id:{back:'Command center',eyebrow:'DOKUMEN',title:'Dokumen',subtitle:'Satu tempat terpercaya untuk semua dokumen bisnis penting.',add:'Tambah dokumen',search:'Cari judul, nomor, pihak terkait…',allStatus:'Semua status',allTypes:'Semua tipe',newest:'Terbaru',oldest:'Terlama',expirySoonest:'Masa berlaku terdekat',expiryLatest:'Masa berlaku terlama',titleAZ:'Judul A–Z',active:'Aktif',expiring:'Segera berakhir',expired:'Sudah berakhir',noExpiry:'Tanpa masa berlaku',archived:'Diarsipkan',document:'Dokumen',type:'Tipe',counterparty:'Pihak terkait',expiry:'Masa berlaku',status:'Status',open:'Buka',noNumber:'Tidak ada nomor dokumen',refreshing:'Memperbarui…',updated:'Diperbarui barusan',page:'Halaman',noDocuments:'Dokumen tidak ditemukan',tryFilter:'Coba filter lain atau tambahkan dokumen pertama Anda.',addFirst:'Tambah dokumen',sessionExpired:'Sesi Anda telah berakhir. Silakan masuk kembali.',loadFailed:'Gagal memuat dokumen.'}} as const;
 const types=['CONTRACT','LICENSE','CERTIFICATE','INSURANCE','PERMIT','OTHER'];
 const validStatuses:Status[]=['ACTIVE','EXPIRING_SOON','EXPIRED','NO_EXPIRY','ARCHIVED'];
 const token=()=>typeof window==='undefined'?'':window.sessionStorage.getItem('expiry-tracker-token')??'';
 const getRole=():Role=>{try{const t=token();return t?JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).role??'VIEWER':'VIEWER'}catch{return 'VIEWER'}};
 const initialParam=(name:string)=>typeof window==='undefined'?'':new URLSearchParams(window.location.search).get(name)??'';
-const date=(v:string|null|undefined,lang:Lang)=>v?new Intl.DateTimeFormat(lang==='id'?'id-ID':'en-US',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(v)):copy[lang].noExpiry;
+const date=(v:string|null|undefined,lang:'en'|'id')=>v?new Intl.DateTimeFormat(lang==='id'?'id-ID':'en-US',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(v)):copy[lang].noExpiry;
 export default function DocumentsPage(){
- const initialStatus=initialParam('status'); const initialSearch=initialParam('search');
- const [lang,setLang]=useState<Lang>('id'); const [docs,setDocs]=useState<Doc[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[pages,setPages]=useState(1),[search,setSearch]=useState(initialSearch),[status,setStatus]=useState<Status|''>(validStatuses.includes(initialStatus as Status)?initialStatus as Status:''),[type,setType]=useState(''),[sort,setSort]=useState('created_desc'),[loading,setLoading]=useState(true),[error,setError]=useState('');
+ const {lang}=useLanguage(); const initialStatus=initialParam('status'); const initialSearch=initialParam('search');
+ const [docs,setDocs]=useState<Doc[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[pages,setPages]=useState(1),[search,setSearch]=useState(initialSearch),[status,setStatus]=useState<Status|''>(validStatuses.includes(initialStatus as Status)?initialStatus as Status:''),[type,setType]=useState(''),[sort,setSort]=useState('created_desc'),[loading,setLoading]=useState(true),[error,setError]=useState('');
  const t=copy[lang];
- useEffect(()=>{const stored=window.localStorage.getItem('expiry-tracker-language');if(stored==='en'||stored==='id')setLang(stored);const sync=()=>{const v=window.localStorage.getItem('expiry-tracker-language');if(v==='en'||v==='id')setLang(v)};window.addEventListener('storage',sync);const timer=window.setInterval(sync,250);return()=>{window.removeEventListener('storage',sync);window.clearInterval(timer)}},[]);
  const canEdit=useMemo(()=>['SUPERUSER','EDITOR'].includes(getRole()),[]);
  const statusLabels:Record<Status,string>={ACTIVE:t.active,EXPIRING_SOON:t.expiring,EXPIRED:t.expired,NO_EXPIRY:t.noExpiry,ARCHIVED:t.archived};
  const query=useMemo(()=>new URLSearchParams({page:String(page),limit:'12',...(search?{search}:{}),...(status?{status}:{}),...(type?{documentType:type}:{}),sort}).toString(),[page,search,status,type,sort]);
