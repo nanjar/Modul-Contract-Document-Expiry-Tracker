@@ -9,6 +9,12 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://expiry_tracker:expiry_tracker@localhost:5432/expiry_tracker?schema=public
+      JWT_SECRET: ci-only-test-secret
+      PORT: 3001
+      FRONTEND_URL: http://localhost:3000
+      NOTIFICATION_EMAIL_MODE: console
     defaults:
       run:
         working-directory: backend
@@ -21,12 +27,16 @@ jobs:
         with:
           node-version: 22
       - run: pnpm install --no-frozen-lockfile
-      - run: pnpm prisma generate
+      - run: pnpm exec prisma validate
+      - run: pnpm exec prisma generate
       - run: pnpm test -- --runInBand
       - run: pnpm build
 
   frontend:
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api/v1
+      NEXT_PUBLIC_NOTIFICATION_EMAIL_MODE: console
     defaults:
       run:
         working-directory: frontend
