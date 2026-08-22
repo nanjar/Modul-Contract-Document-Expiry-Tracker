@@ -91,19 +91,11 @@ export default function WorkspaceChrome({ children }: Props) {
   }, [pathname]);
 
   useEffect(() => {
+    if (pathname === '/documents') return;
     const value = query.trim();
-    if (pathname !== '/documents' && !value) return;
+    if (!value) return;
     const timer = window.setTimeout(() => {
-      if (pathname !== '/documents') {
-        router.push(`/documents?search=${encodeURIComponent(value)}`);
-      } else {
-        const params = new URLSearchParams(window.location.search);
-        if (value) params.set('search', value); else params.delete('search');
-        const nextQuery = params.toString();
-        const target = `/documents${nextQuery ? `?${nextQuery}` : ''}`;
-        if (window.location.search !== (nextQuery ? `?${nextQuery}` : '')) router.push(target);
-      }
-      window.dispatchEvent(new CustomEvent('expiry-tracker-search', { detail: value }));
+      router.push(`/documents?search=${encodeURIComponent(value)}`);
       window.dispatchEvent(new CustomEvent('expiry-tracker-route-change'));
     }, 450);
     return () => window.clearTimeout(timer);
