@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, Injectable, TooManyRequestsException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, HttpException, HttpStatus, Injectable } from '@nestjs/common';
 
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 10;
@@ -21,7 +21,7 @@ export class AuthRateLimitGuard implements CanActivate {
     }
 
     if (current.count >= MAX_ATTEMPTS) {
-      throw new TooManyRequestsException('Too many login attempts. Try again later.');
+      throw new HttpException('Too many login attempts. Try again later.', HttpStatus.TOO_MANY_REQUESTS);
     }
 
     current.count += 1;
