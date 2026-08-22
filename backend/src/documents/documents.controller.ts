@@ -24,6 +24,36 @@ import { ListDocumentsQueryDto } from './dto/list-documents-query.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { DocumentsService } from './documents.service';
 
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain',
+  'text/csv',
+  'image/jpeg',
+  'image/png',
+]);
+
+const EXTENSION_BY_MIME: Record<string, string> = {
+  'application/pdf': '.pdf',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.ms-excel': '.xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'application/vnd.ms-powerpoint': '.ppt',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'text/plain': '.txt',
+  'text/csv': '.csv',
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+};
+
 @ApiTags('documents')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -77,7 +107,18 @@ export class DocumentsController {
       required: ['file'],
     },
   })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: MAX_UPLOAD_BYTES },
+      fileFilter: (_req, file, callback) => {
+        if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+          callback(new BadRequestException(`Unsupported file type: ${file.mimetype}`), false);
+          return;
+        }
+        callback(null, true);
+      },
+    }),
+  )
   async uploadFile(
     @Param('id') id: string,
     @UploadedFile() file: { originalname: string; mimetype: string; buffer: Buffer; size: number },
@@ -88,11 +129,13 @@ export class DocumentsController {
       throw new BadRequestException('Invalid uploaded file');
     }
 
+    const expectedExtension = EXTENSION_BY_MIME[file.mimetype];
+    if (!expectedExtension) {
+      throw new BadRequestException(`Unsupported file type: ${file.mimetype}`);
+    }
+
     const document = await this.documents.findOne(id);
-    const extension = file.originalname.includes('.')
-      ? file.originalname.slice(file.originalname.lastIndexOf('.')).toLowerCase()
-      : '';
-    const key = `documents/${id}/${crypto.randomUUID()}${extension}`;
+    const key = `documents/${id}/${crypto.randomUUID()}${expectedExtension}`;
 
     await this.storage.putObject({
       key,
