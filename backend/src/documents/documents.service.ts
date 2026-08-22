@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { RemindersService } from '../reminders/reminders.service';
@@ -10,17 +6,20 @@ import { DocumentStatus } from './documents.types';
 
 @Injectable()
 export class DocumentsService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly audit: AuditService,
-    private readonly reminders: RemindersService,
-  ) {}
+  constructor(private readonly prisma: PrismaService, private readonly audit: AuditService, private readonly reminders: RemindersService) {}
 
-  async list(query?: { search?: string; status?: string; documentType?: string; page?: number; limit?: number }) {
+  async list(query?: { search?: string; status?: string; documentType?: string; expiryFrom?: string; expiryTo?: string; sort?: string; page?: number; limit?: number }) {
     const page = Math.max(1, query?.page ?? 1);
     const limit = Math.min(100, Math.max(1, query?.limit ?? 20));
     const skip = (page - 1) * limit;
-    const where: any = { archivedAt: null };
+    const now = new Date();
+    const threshold = new Date(now); threshold.setDate(threshold.getDate() + 30);
+    const status = query?.status?.trim() as DocumentStatus | undefined;
+    const where: any = {};
+
+    if (status === DocumentStatus.ARCHIVED) where.archivedAt = { not: null };
+    else where.archivedAt = null;
+
     if (query?.search?.trim()) {
       const search = query.search.trim();
       where.OR = [
@@ -30,14 +29,27 @@ export class DocumentsService {
       ];
     }
     if (query?.documentType?.trim()) where.documentType = query.documentType.trim();
+    if (query?.expiryFrom || query?.expiryTo) {
+      where.expiryDate = {};
+      if (query.expiryFrom) where.expiryDate.gte = new Date(query.expiryFrom);
+      if (query.expiryTo) where.expiryDate.lte = new Date(query.expiryTo);
+    }
+
+    if (status === DocumentStatus.NO_EXPIRY) where.expiryDate = null;
+    if (status === DocumentStatus.EXPIRED) where.expiryDate = { ...(where.expiryDate ?? {}), lt: now };
+    if (status === DocumentStatus.EXPIRING_SOON) where.expiryDate = { ...(where.expiryDate ?? {}), gte: now, lte: threshold };
+    if (status === DocumentStatus.ACTIVE) where.expiryDate = { ...(where.expiryDate ?? {}), gt: threshold };
+
+    const orderBy = this.getOrderBy(query?.sort);
     const [documents, total] = await this.prisma.$transaction([
-      this.prisma.document.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: limit }),
+      this.prisma.document.findMany({ where, orderBy, skip, take: limit }),
       this.prisma.document.count({ where }),
     ]);
-    let items = documents.map((document) => this.toResponse(document));
-    if (query?.status?.trim()) items = items.filter((document) => document.status === query.status);
-    const filteredTotal = query?.status?.trim() ? items.length : total;
-    return { items, pagination: { page, limit, total: filteredTotal, totalPages: Math.ceil(filteredTotal / limit) } };
+
+    return {
+      items: documents.map((document) => this.toResponse(document)),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async findOne(id: string) {
@@ -48,18 +60,12 @@ export class DocumentsService {
 
   async create(input: any) {
     if (input.ownerId) await this.assertOwnerExists(input.ownerId);
-    const document = await this.prisma.document.create({
-      data: {
-        documentNumber: input.documentNumber?.trim() || null,
-        title: input.title.trim(), documentType: input.documentType.trim(),
-        description: input.description?.trim() || null, counterparty: input.counterparty?.trim() || null,
-        ownerId: input.ownerId || null,
-        issueDate: input.issueDate ? new Date(input.issueDate) : null,
-        effectiveDate: input.effectiveDate ? new Date(input.effectiveDate) : null,
-        expiryDate: input.expiryDate ? new Date(input.expiryDate) : null,
-        reminderEnabled: input.reminderEnabled ?? true, createdById: input.createdById,
-      },
-    });
+    const document = await this.prisma.document.create({ data: {
+      documentNumber: input.documentNumber?.trim() || null, title: input.title.trim(), documentType: input.documentType.trim(),
+      description: input.description?.trim() || null, counterparty: input.counterparty?.trim() || null, ownerId: input.ownerId || null,
+      issueDate: input.issueDate ? new Date(input.issueDate) : null, effectiveDate: input.effectiveDate ? new Date(input.effectiveDate) : null,
+      expiryDate: input.expiryDate ? new Date(input.expiryDate) : null, reminderEnabled: input.reminderEnabled ?? true, createdById: input.createdById,
+    } });
     await this.audit.log({ actorId: input.createdById, action: 'CREATE', entity: 'Document', entityId: document.id, metadata: { title: document.title, documentType: document.documentType, expiryDate: document.expiryDate } });
     await this.reminders.createDefaults(document.id);
     return this.toResponse(document);
@@ -69,20 +75,13 @@ export class DocumentsService {
     const existing = await this.prisma.document.findUnique({ where: { id } });
     if (!existing || existing.archivedAt) throw new NotFoundException('Document not found');
     if (input.ownerId) await this.assertOwnerExists(input.ownerId);
-    const document = await this.prisma.document.update({
-      where: { id }, data: {
-        ...(input.documentNumber !== undefined && { documentNumber: input.documentNumber.trim() || null }),
-        ...(input.title !== undefined && { title: input.title.trim() }),
-        ...(input.documentType !== undefined && { documentType: input.documentType.trim() }),
-        ...(input.description !== undefined && { description: input.description.trim() || null }),
-        ...(input.counterparty !== undefined && { counterparty: input.counterparty.trim() || null }),
-        ...(input.ownerId !== undefined && { ownerId: input.ownerId }),
-        ...(input.issueDate !== undefined && { issueDate: input.issueDate ? new Date(input.issueDate) : null }),
-        ...(input.effectiveDate !== undefined && { effectiveDate: input.effectiveDate ? new Date(input.effectiveDate) : null }),
-        ...(input.expiryDate !== undefined && { expiryDate: input.expiryDate ? new Date(input.expiryDate) : null }),
-        ...(input.reminderEnabled !== undefined && { reminderEnabled: input.reminderEnabled }),
-      },
-    });
+    const document = await this.prisma.document.update({ where: { id }, data: {
+      ...(input.documentNumber !== undefined && { documentNumber: input.documentNumber.trim() || null }), ...(input.title !== undefined && { title: input.title.trim() }),
+      ...(input.documentType !== undefined && { documentType: input.documentType.trim() }), ...(input.description !== undefined && { description: input.description.trim() || null }),
+      ...(input.counterparty !== undefined && { counterparty: input.counterparty.trim() || null }), ...(input.ownerId !== undefined && { ownerId: input.ownerId }),
+      ...(input.issueDate !== undefined && { issueDate: input.issueDate ? new Date(input.issueDate) : null }), ...(input.effectiveDate !== undefined && { effectiveDate: input.effectiveDate ? new Date(input.effectiveDate) : null }),
+      ...(input.expiryDate !== undefined && { expiryDate: input.expiryDate ? new Date(input.expiryDate) : null }), ...(input.reminderEnabled !== undefined && { reminderEnabled: input.reminderEnabled }),
+    } });
     await this.audit.log({ actorId, action: 'UPDATE', entity: 'Document', entityId: document.id, metadata: { previous: { title: existing.title, documentType: existing.documentType, expiryDate: existing.expiryDate, ownerId: existing.ownerId, reminderEnabled: existing.reminderEnabled }, current: { title: document.title, documentType: document.documentType, expiryDate: document.expiryDate, ownerId: document.ownerId, reminderEnabled: document.reminderEnabled } } });
     if (document.expiryDate && document.reminderEnabled && (!existing.expiryDate || !existing.reminderEnabled || document.expiryDate.getTime() !== existing.expiryDate.getTime())) await this.reminders.createDefaults(document.id);
     return this.toResponse(document);
@@ -92,7 +91,7 @@ export class DocumentsService {
     const existing = await this.prisma.document.findUnique({ where: { id } });
     if (!existing || existing.archivedAt) throw new NotFoundException('Document not found');
     const document = await this.prisma.document.update({ where: { id }, data: file });
-    await this.audit.log({ actorId, action: 'UPLOAD_FILE', entity: 'Document', entityId: id, metadata: { originalFilename: file.originalFilename, mimeType: file.mimeType, fileSize: file.fileSize, storageKey: file.storageKey } });
+    await this.audit.log({ actorId, action: 'UPLOAD_FILE', entity: 'Document', entityId: id, metadata: { originalFilename: file.originalFilename, mimeType: file.mimeType, fileSize: file.fileSize } });
     return this.toResponse(document);
   }
 
@@ -102,6 +101,16 @@ export class DocumentsService {
     const document = await this.prisma.document.update({ where: { id }, data: { archivedAt: new Date(), archivedById: actorId } });
     await this.audit.log({ actorId, action: 'ARCHIVE', entity: 'Document', entityId: document.id, metadata: { title: document.title } });
     return this.toResponse(document);
+  }
+
+  private getOrderBy(sort?: string) {
+    switch (sort) {
+      case 'created_asc': return { createdAt: 'asc' as const };
+      case 'expiry_asc': return [{ expiryDate: { sort: 'asc' as const, nulls: 'last' as const } }, { createdAt: 'desc' as const }];
+      case 'expiry_desc': return [{ expiryDate: { sort: 'desc' as const, nulls: 'last' as const } }, { createdAt: 'desc' as const }];
+      case 'title_asc': return { title: 'asc' as const };
+      default: return { createdAt: 'desc' as const };
+    }
   }
 
   private async assertOwnerExists(ownerId: string) {
@@ -116,8 +125,7 @@ export class DocumentsService {
   private status(document: { expiryDate: Date | null; archivedAt: Date | null }): DocumentStatus {
     if (document.archivedAt) return DocumentStatus.ARCHIVED;
     if (!document.expiryDate) return DocumentStatus.NO_EXPIRY;
-    const now = new Date();
-    const expiry = new Date(document.expiryDate);
+    const now = new Date(); const expiry = new Date(document.expiryDate);
     if (expiry < now) return DocumentStatus.EXPIRED;
     const threshold = new Date(now); threshold.setDate(threshold.getDate() + 30);
     if (expiry <= threshold) return DocumentStatus.EXPIRING_SOON;
