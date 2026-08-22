@@ -35,10 +35,14 @@ export class AuditService {
     const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
     const skip = (page - 1) * limit;
 
+    const action = query.action?.trim();
+    const entity = query.entity?.trim();
+    const entityId = query.entityId?.trim();
+
     const where = {
-      ...(query.action ? { action: query.action } : {}),
-      ...(query.entity ? { entity: query.entity } : {}),
-      ...(query.entityId ? { entityId: query.entityId } : {}),
+      ...(action ? { action: { contains: action, mode: 'insensitive' as const } } : {}),
+      ...(entity ? { entity: { contains: entity, mode: 'insensitive' as const } } : {}),
+      ...(entityId ? { entityId: { contains: entityId, mode: 'insensitive' as const } } : {}),
     };
 
     const [items, total] = await Promise.all([
