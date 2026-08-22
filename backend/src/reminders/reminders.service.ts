@@ -66,6 +66,25 @@ export class RemindersService {
     return this.prisma.$transaction(DEFAULT_REMINDER_DAYS.map((daysBefore) => this.prisma.reminder.upsert({ where: { documentId_daysBefore: { documentId, daysBefore } }, update: {}, create: { documentId, daysBefore, enabled: true } })));
   }
 
+  /**
+   * Re-anchors reminder delivery state when the document expiry lifecycle
+   * changes. A reminder that was already sent for the old expiry must not
+   * suppress delivery for the new expiry date.
+   */
+  async resetDeliveryState(documentId: string, enableDefaults = false) {
+    await this.prisma.reminder.updateMany({
+      where: { documentId },
+      data: { lastSentAt: null, processingAt: null },
+    });
+
+    if (enableDefaults) {
+      await this.prisma.reminder.updateMany({
+        where: { documentId, daysBefore: { in: DEFAULT_REMINDER_DAYS } },
+        data: { enabled: true },
+      });
+    }
+  }
+
   private async assertDocument(documentId: string) {
     const document = await this.prisma.document.findUnique({ where: { id: documentId }, select: { id: true, archivedAt: true, expiryDate: true, reminderEnabled: true } });
     if (!document || document.archivedAt) throw new NotFoundException('Document not found');
