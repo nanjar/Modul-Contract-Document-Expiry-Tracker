@@ -10,19 +10,10 @@ import { PrismaModule } from './prisma/prisma.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { StorageModule } from './storage/storage.module';
 import { UsersModule } from './users/users.module';
+import { HealthController } from './health.controller';
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
-    ScheduleModule.forRoot(),
-    PrismaModule,
-    AuthModule,
-    DashboardModule,
-    DocumentsModule,
-    NotificationsModule,
-    SchedulerModule,
-    StorageModule,
-    UsersModule,
-  ],
+  imports: [ConfigModule.forRoot({ isGlobal: true, load: [configuration] }), ScheduleModule.forRoot(), PrismaModule, AuthModule, DashboardModule, DocumentsModule, NotificationsModule, SchedulerModule, StorageModule, UsersModule],
+  controllers: [HealthController],
 })
 export class AppModule {}
