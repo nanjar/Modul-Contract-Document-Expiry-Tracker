@@ -6,7 +6,6 @@ import {
   Param,
   Patch,
   Post,
-  Query,
   Req,
   UploadedFile,
   UseGuards,
@@ -143,15 +142,31 @@ export class DocumentsController {
       contentType: file.mimetype,
     });
 
-    await this.documents.attachFile(id, {
-      storageKey: key,
-      originalFilename: file.originalname,
-      mimeType: file.mimetype,
-      fileSize: file.size,
-    }, req.user.sub);
+    try {
+      await this.documents.attachFile(id, {
+        storageKey: key,
+        originalFilename: file.originalname,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+      }, req.user.sub);
+    } catch (error) {
+      // The object was uploaded before the database update. Remove it when
+      // persistence fails so a failed request does not leave an orphaned blob.
+      try {
+        await this.storage.deleteObject(key);
+      } catch {
+        // Keep the original persistence error as the API response.
+      }
+      throw error;
+    }
 
     if (document.storageKey && document.storageKey !== key) {
-      await this.storage.deleteObject(document.storageKey);
+      try {
+        await this.storage.deleteObject(document.storageKey);
+      } catch {
+        // The database now points at the new object. Old-object cleanup is
+        // best-effort and must not turn a successful upload into a failure.
+      }
     }
 
     return this.documents.findOne(id);
