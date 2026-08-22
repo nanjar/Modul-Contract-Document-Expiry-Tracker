@@ -5,94 +5,81 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { RemindersService } from '../reminders/reminders.service';
 import { DocumentStatus } from './documents.types';
-
-export interface DocumentListQuery {
-  search?: string;
-  status?: string;
-  documentType?: string;
-  page?: number;
-  limit?: number;
-}
 
 @Injectable()
 export class DocumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly reminders: RemindersService,
   ) {}
 
-  async list(query: DocumentListQuery = {}) {
-    const page = Math.max(1, Number(query.page) || 1);
-    const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+  async list(query?: {
+    search?: string;
+    status?: string;
+    documentType?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = Math.max(1, query?.page ?? 1);
+    const limit = Math.min(100, Math.max(1, query?.limit ?? 20));
     const skip = (page - 1) * limit;
-    const now = new Date();
-    const threshold = new Date(now);
-    threshold.setDate(threshold.getDate() + 30);
 
-    const where: any = { archivedAt: null };
+    const where: any = {
+      archivedAt: null,
+    };
 
-    if (query.search?.trim()) {
+    if (query?.search?.trim()) {
       const search = query.search.trim();
       where.OR = [
         { title: { contains: search, mode: 'insensitive' } },
         { documentNumber: { contains: search, mode: 'insensitive' } },
-        { documentType: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
         { counterparty: { contains: search, mode: 'insensitive' } },
       ];
     }
 
-    if (query.documentType?.trim()) {
+    if (query?.documentType?.trim()) {
       where.documentType = query.documentType.trim();
     }
 
-    switch (query.status?.trim().toUpperCase()) {
-      case DocumentStatus.EXPIRED:
-        where.expiryDate = { lt: now };
-        break;
-      case DocumentStatus.EXPIRING_SOON:
-        where.expiryDate = { gte: now, lte: threshold };
-        break;
-      case DocumentStatus.ACTIVE:
-        where.expiryDate = { gt: threshold };
-        break;
-      case DocumentStatus.NO_EXPIRY:
-        where.expiryDate = null;
-        break;
-      case undefined:
-      case '':
-        break;
-      default:
-        throw new BadRequestException('Invalid document status');
-    }
-
-    const [documents, total] = await Promise.all([
+    const [documents, total] = await this.prisma.$transaction([
       this.prisma.document.findMany({
         where,
-        orderBy: [{ expiryDate: 'asc' }, { createdAt: 'desc' }],
+        orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
       this.prisma.document.count({ where }),
     ]);
 
+    let items = documents.map((document) => this.toResponse(document));
+
+    if (query?.status?.trim()) {
+      items = items.filter((document) => document.status === query.status);
+    }
+
+    const filteredTotal = query?.status?.trim() ? items.length : total;
+
     return {
-      items: documents.map((document) => this.toResponse(document)),
+      items,
       pagination: {
         page,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit),
+        total: filteredTotal,
+        totalPages: Math.ceil(filteredTotal / limit),
       },
     };
   }
 
   async findOne(id: string) {
     const document = await this.prisma.document.findUnique({ where: { id } });
+
     if (!document || document.archivedAt) {
       throw new NotFoundException('Document not found');
     }
+
     return this.toResponse(document);
   }
 
@@ -141,6 +128,8 @@ export class DocumentsService {
       },
     });
 
+    await this.reminders.createDefaults(document.id);
+
     return this.toResponse(document);
   }
 
@@ -161,6 +150,7 @@ export class DocumentsService {
     actorId: string,
   ) {
     const existing = await this.prisma.document.findUnique({ where: { id } });
+
     if (!existing || existing.archivedAt) {
       throw new NotFoundException('Document not found');
     }
@@ -172,16 +162,32 @@ export class DocumentsService {
     const document = await this.prisma.document.update({
       where: { id },
       data: {
-        ...(input.documentNumber !== undefined && { documentNumber: input.documentNumber.trim() || null }),
+        ...(input.documentNumber !== undefined && {
+          documentNumber: input.documentNumber.trim() || null,
+        }),
         ...(input.title !== undefined && { title: input.title.trim() }),
-        ...(input.documentType !== undefined && { documentType: input.documentType.trim() }),
-        ...(input.description !== undefined && { description: input.description.trim() || null }),
-        ...(input.counterparty !== undefined && { counterparty: input.counterparty.trim() || null }),
+        ...(input.documentType !== undefined && {
+          documentType: input.documentType.trim(),
+        }),
+        ...(input.description !== undefined && {
+          description: input.description.trim() || null,
+        }),
+        ...(input.counterparty !== undefined && {
+          counterparty: input.counterparty.trim() || null,
+        }),
         ...(input.ownerId !== undefined && { ownerId: input.ownerId }),
-        ...(input.issueDate !== undefined && { issueDate: input.issueDate ? new Date(input.issueDate) : null }),
-        ...(input.effectiveDate !== undefined && { effectiveDate: input.effectiveDate ? new Date(input.effectiveDate) : null }),
-        ...(input.expiryDate !== undefined && { expiryDate: input.expiryDate ? new Date(input.expiryDate) : null }),
-        ...(input.reminderEnabled !== undefined && { reminderEnabled: input.reminderEnabled }),
+        ...(input.issueDate !== undefined && {
+          issueDate: input.issueDate ? new Date(input.issueDate) : null,
+        }),
+        ...(input.effectiveDate !== undefined && {
+          effectiveDate: input.effectiveDate ? new Date(input.effectiveDate) : null,
+        }),
+        ...(input.expiryDate !== undefined && {
+          expiryDate: input.expiryDate ? new Date(input.expiryDate) : null,
+        }),
+        ...(input.reminderEnabled !== undefined && {
+          reminderEnabled: input.reminderEnabled,
+        }),
       },
     });
 
@@ -208,11 +214,22 @@ export class DocumentsService {
       },
     });
 
+    if (
+      document.expiryDate &&
+      document.reminderEnabled &&
+      (!existing.expiryDate ||
+        !existing.reminderEnabled ||
+        document.expiryDate.getTime() !== existing.expiryDate.getTime())
+    ) {
+      await this.reminders.createDefaults(document.id);
+    }
+
     return this.toResponse(document);
   }
 
   async archive(id: string, actorId: string) {
     const existing = await this.prisma.document.findUnique({ where: { id } });
+
     if (!existing || existing.archivedAt) {
       throw new NotFoundException('Document not found');
     }
@@ -268,21 +285,29 @@ export class DocumentsService {
   }) {
     return {
       ...document,
-      fileSize: typeof document.fileSize === 'bigint' ? document.fileSize.toString() : document.fileSize,
+      fileSize:
+        typeof document.fileSize === 'bigint'
+          ? document.fileSize.toString()
+          : document.fileSize,
       status: this.status(document),
     };
   }
 
-  private status(document: { expiryDate: Date | null; archivedAt: Date | null }): DocumentStatus {
+  private status(document: {
+    expiryDate: Date | null;
+    archivedAt: Date | null;
+  }): DocumentStatus {
     if (document.archivedAt) return DocumentStatus.ARCHIVED;
     if (!document.expiryDate) return DocumentStatus.NO_EXPIRY;
 
     const now = new Date();
     const expiry = new Date(document.expiryDate);
+
     if (expiry < now) return DocumentStatus.EXPIRED;
 
     const threshold = new Date(now);
     threshold.setDate(threshold.getDate() + 30);
+
     if (expiry <= threshold) return DocumentStatus.EXPIRING_SOON;
 
     return DocumentStatus.ACTIVE;
