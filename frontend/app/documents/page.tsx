@@ -19,7 +19,13 @@ export default function DocumentsPage(){
  const t=copy[lang];
  const canEdit=useMemo(()=>['SUPERUSER','EDITOR'].includes(getRole()),[]);
  const statusLabels:Record<Status,string>={ACTIVE:t.active,EXPIRING_SOON:t.expiring,EXPIRED:t.expired,NO_EXPIRY:t.noExpiry,ARCHIVED:t.archived};
- useEffect(()=>{const params=new URLSearchParams(window.location.search);const initialSearch=params.get('search')??'';const initialStatus=params.get('status')??'';setSearch(initialSearch);setStatus(validStatuses.includes(initialStatus as Status)?initialStatus as Status:'')},[]);
+ const syncUrl=()=>{const params=new URLSearchParams(window.location.search);const initialSearch=params.get('search')??'';const initialStatus=params.get('status')??'';setPage(1);setSearch(initialSearch);setStatus(validStatuses.includes(initialStatus as Status)?initialStatus as Status:'')};
+ useEffect(()=>{
+   syncUrl();
+   const handleSearch=(event:Event)=>{const value=(event as CustomEvent<string>).detail??'';setPage(1);setSearch(value)};
+   window.addEventListener('expiry-tracker-search',handleSearch);
+   return()=>window.removeEventListener('expiry-tracker-search',handleSearch);
+ },[]);
  useEffect(()=>{const id='documents-page-style';if(!document.getElementById(id)){const s=document.createElement('style');s.id=id;s.textContent=style;document.head.appendChild(s)}return()=>{const node=document.getElementById(id);node?.remove()}},[]);
  const query=useMemo(()=>new URLSearchParams({page:String(page),limit:'12',...(search?{search}:{}),...(status?{status}:{}),...(type?{documentType:type}:{}),sort}).toString(),[page,search,status,type,sort]);
  useEffect(()=>{const controller=new AbortController();let current=true;setLoading(true);setError('');(async()=>{try{const r=await fetch(`${API}/documents?${query}`,{headers:{Authorization:`Bearer ${token()}`},signal:controller.signal});if(r.status===401)throw new Error(t.sessionExpired);if(!r.ok)throw new Error(t.loadFailed);const body=await r.json();if(!current)return;setDocs(body.items??[]);setTotal(body.pagination?.total??0);setPages(body.pagination?.totalPages??1)}catch(e){if(e instanceof DOMException&&e.name==='AbortError')return;if(current)setError(e instanceof Error?e.message:t.loadFailed)}finally{if(current)setLoading(false)}})();return()=>{current=false;controller.abort()}},[query,lang,t.loadFailed,t.sessionExpired]);
