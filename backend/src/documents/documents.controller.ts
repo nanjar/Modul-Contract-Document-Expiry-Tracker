@@ -80,7 +80,7 @@ export class DocumentsController {
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
     @Param('id') id: string,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: { originalname: string; mimetype: string; buffer: Buffer; size: number },
     @Req() req: any,
   ) {
     if (!file) throw new BadRequestException('File is required');
