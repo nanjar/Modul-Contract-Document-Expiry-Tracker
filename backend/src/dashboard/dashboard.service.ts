@@ -1,21 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DocumentStatus } from '../documents/documents.types';
-import { calculateDocumentStatus } from '../documents/expiry.utils';
+import { calculateDocumentStatus, expiryWindow } from '../documents/expiry.utils';
 
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
   async summary() {
-    const now = new Date();
-    const threshold = new Date(now); threshold.setDate(threshold.getDate() + 30);
+    const { today, threshold } = expiryWindow();
     const base = { archivedAt: null };
     const [total, active, expiringSoon, expired, noExpiry] = await this.prisma.$transaction([
       this.prisma.document.count({ where: base }),
       this.prisma.document.count({ where: { ...base, expiryDate: { gt: threshold } } }),
-      this.prisma.document.count({ where: { ...base, expiryDate: { gte: now, lte: threshold } } }),
-      this.prisma.document.count({ where: { ...base, expiryDate: { lt: now } } }),
+      this.prisma.document.count({ where: { ...base, expiryDate: { gte: today, lte: threshold } } }),
+      this.prisma.document.count({ where: { ...base, expiryDate: { lt: today } } }),
       this.prisma.document.count({ where: { ...base, expiryDate: null } }),
     ]);
     return { total, active, expiringSoon, expired, noExpiry };
