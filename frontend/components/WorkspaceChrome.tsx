@@ -34,7 +34,8 @@ function roleFromToken(): Role {
   try {
     const token = typeof window !== 'undefined' ? sessionStorage.getItem('expiry-tracker-token') : null;
     if (!token) return 'VIEWER';
-    return (JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).role ?? 'VIEWER') as Role;
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return (payload.role ?? 'VIEWER') as Role;
   } catch {
     return 'VIEWER';
   }
@@ -79,37 +80,51 @@ export default function WorkspaceChrome({ children }: Props) {
 
   useEffect(() => {
     const value = query.trim();
-    if (!value) return;
     const timer = window.setTimeout(() => {
-      const target = `/documents?search=${encodeURIComponent(value)}`;
-      router.push(target);
+      const target = `/documents${value ? `?search=${encodeURIComponent(value)}` : ''}`;
+      if (pathname !== '/documents' || window.location.search !== (value ? `?search=${encodeURIComponent(value)}` : '')) {
+        router.push(target);
+      }
       window.dispatchEvent(new CustomEvent('expiry-tracker-search', { detail: value }));
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [query, router]);
+  }, [query, router, pathname]);
 
   useEffect(() => {
-    if (pathname === '/documents') {
+    const syncDocumentRoute = () => {
+      if (pathname !== '/documents') return;
       const params = new URLSearchParams(window.location.search);
       setQuery(params.get('search') ?? '');
       setArchiveActive(params.get('status') === 'ARCHIVED');
-    } else {
-      setArchiveActive(false);
-    }
+    };
+    syncDocumentRoute();
+    const handleRouteChange = () => syncDocumentRoute();
+    window.addEventListener('popstate', handleRouteChange);
+    window.addEventListener('expiry-tracker-route-change', handleRouteChange);
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange);
+      window.removeEventListener('expiry-tracker-route-change', handleRouteChange);
+    };
   }, [pathname]);
 
   if (pathname === '/') return <>{children}</>;
+
+  function navigate(href: string) {
+    window.dispatchEvent(new CustomEvent('expiry-tracker-route-change', { detail: href }));
+  }
 
   function search(event: FormEvent) {
     event.preventDefault();
     const value = query.trim();
     const target = `/documents${value ? `?search=${encodeURIComponent(value)}` : ''}`;
     router.push(target);
-    if (value) window.dispatchEvent(new CustomEvent('expiry-tracker-search', { detail: value }));
+    window.dispatchEvent(new CustomEvent('expiry-tracker-search', { detail: value }));
+    window.dispatchEvent(new CustomEvent('expiry-tracker-route-change', { detail: target }));
   }
 
   function logout() {
     sessionStorage.removeItem('expiry-tracker-token');
+    window.dispatchEvent(new Event('expiry-tracker-auth-change'));
     router.push('/');
   }
 
@@ -123,13 +138,13 @@ export default function WorkspaceChrome({ children }: Props) {
       <div className="chrome-brand"><Brand /><span>Expiry Tracker</span></div>
       <div className="chrome-section-label">{lang === 'id' ? 'UMUM' : 'GENERAL'}</div>
       <nav className="chrome-nav">
-        {nav.map(([key, href, icon]) => <Link key={href} href={href} className={`chrome-nav-item ${active(href) ? 'active' : ''}`}><Icon name={icon} /><span>{t(key)}</span></Link>)}
+        {nav.map(([key, href, icon]) => <Link key={href} href={href} onClick={() => navigate(href)} className={`chrome-nav-item ${active(href) ? 'active' : ''}`}><Icon name={icon} /><span>{t(key)}</span></Link>)}
       </nav>
       {role === 'SUPERUSER' && <>
         <div className="chrome-section-label admin">{lang === 'id' ? 'ADMINISTRASI' : 'ADMINISTRATION'}</div>
         <nav className="chrome-nav">
-          <Link href="/users" className={`chrome-nav-item ${active('/users') ? 'active' : ''}`}><Icon name="users" /><span>{t('users')}</span></Link>
-          <Link href="/settings" className={`chrome-nav-item ${active('/settings') ? 'active' : ''}`}><Icon name="settings" /><span>{t('settings')}</span></Link>
+          <Link href="/users" onClick={() => navigate('/users')} className={`chrome-nav-item ${active('/users') ? 'active' : ''}`}><Icon name="users" /><span>{t('users')}</span></Link>
+          <Link href="/settings" onClick={() => navigate('/settings')} className={`chrome-nav-item ${active('/settings') ? 'active' : ''}`}><Icon name="settings" /><span>{t('settings')}</span></Link>
         </nav>
       </>}
       <div className="chrome-user"><div className="chrome-avatar">{initials}</div><div className="chrome-user-meta"><strong>Admin User</strong><span>{role}</span></div><button onClick={logout} title={t('signOut')}>↗</button></div>
