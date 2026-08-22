@@ -43,7 +43,7 @@ function formatDate(value: string) {
 }
 
 export default function AuditPage() {
-  const session = useMemo<Session | null>(() => getSession(), []);
+  const [session, setSession] = useState<Session | null>(() => getSession());
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -53,6 +53,16 @@ export default function AuditPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<AuditLog | null>(null);
+
+  useEffect(() => {
+    const syncSession = () => setSession(getSession());
+    window.addEventListener('storage', syncSession);
+    window.addEventListener('expiry-tracker-auth-change', syncSession);
+    return () => {
+      window.removeEventListener('storage', syncSession);
+      window.removeEventListener('expiry-tracker-auth-change', syncSession);
+    };
+  }, []);
 
   useEffect(() => {
     if (!session) {
@@ -67,19 +77,20 @@ export default function AuditPage() {
       return;
     }
 
-    // Keep a narrowed, immutable reference for the async callback. TypeScript
-    // cannot safely narrow the outer session variable across an async closure.
     const currentSession = session;
     const controller = new AbortController();
     let timedOut = false;
+    let active = true;
     const timeout = window.setTimeout(() => {
       timedOut = true;
       controller.abort();
     }, 10000);
 
     async function load() {
-      setLoading(true);
-      setError('');
+      if (active) {
+        setLoading(true);
+        setError('');
+      }
       try {
         const qs = new URLSearchParams({ page: String(page), limit: '20' });
         if (action.trim()) qs.set('action', action.trim());
@@ -98,6 +109,7 @@ export default function AuditPage() {
         }
 
         const data = (await response.json()) as AuditResponse | AuditLog[];
+        if (!active) return;
         if (Array.isArray(data)) {
           setLogs(data);
           setTotal(data.length);
@@ -108,8 +120,7 @@ export default function AuditPage() {
           setTotalPages(data.pagination?.totalPages ?? 1);
         }
       } catch (err) {
-        // Abort caused by React Strict Mode cleanup is expected and must not
-        // surface as a user-facing timeout. Only the actual timeout is an error.
+        if (!active) return;
         if (err instanceof DOMException && err.name === 'AbortError') {
           if (timedOut) setError('Permintaan log audit terlalu lama. Periksa backend dan database.');
         } else if (err instanceof Error) {
@@ -118,13 +129,13 @@ export default function AuditPage() {
           setError('Gagal memuat log audit.');
         }
       } finally {
-        window.clearTimeout(timeout);
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
 
     void load();
     return () => {
+      active = false;
       window.clearTimeout(timeout);
       controller.abort();
     };
