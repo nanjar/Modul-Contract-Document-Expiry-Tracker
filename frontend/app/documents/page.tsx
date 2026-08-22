@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
 type Status = 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' | 'NO_EXPIRY' | 'ARCHIVED';
@@ -14,16 +13,15 @@ function date(value?: string | null) { return value ? new Intl.DateTimeFormat('e
 function token() { return typeof window === 'undefined' ? '' : window.sessionStorage.getItem('expiry-tracker-token') ?? ''; }
 
 export default function DocumentsPage() {
-  const searchParams = useSearchParams();
   const [docs, setDocs] = useState<Doc[]>([]); const [total, setTotal] = useState(0); const [page, setPage] = useState(1); const [pages, setPages] = useState(1);
   const [search, setSearch] = useState(''); const [status, setStatus] = useState(''); const [type, setType] = useState(''); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const [open, setOpen] = useState(false); const [saving, setSaving] = useState(false); const [form, setForm] = useState({ title: '', documentType: 'Contract', documentNumber: '', counterparty: '', expiryDate: '' });
 
   useEffect(() => {
-    const requestedStatus = searchParams.get('status') ?? '';
+    const requestedStatus = new URLSearchParams(window.location.search).get('status') ?? '';
     setStatus(['ACTIVE', 'EXPIRING_SOON', 'EXPIRED', 'NO_EXPIRY', 'ARCHIVED'].includes(requestedStatus) ? requestedStatus : '');
     setPage(1);
-  }, [searchParams]);
+  }, []);
 
   const query = useMemo(() => new URLSearchParams({ page: String(page), limit: '12', ...(search ? { search } : {}), ...(status ? { status } : {}), ...(type ? { document_type: type } : {}) }), [page, search, status, type]);
   async function load() { setLoading(true); setError(''); try { const r = await fetch(`${API}/documents?${query}`, { headers: { Authorization: `Bearer ${token()}` } }); if (r.status === 401) throw new Error('Your session has expired. Please sign in again.'); if (!r.ok) throw new Error('Unable to load documents.'); const body: Result = await r.json(); setDocs(body.data); setTotal(body.meta.total); setPages(body.meta.totalPages); } catch (e) { setError(e instanceof Error ? e.message : 'Unable to load documents.'); } finally { setLoading(false); } }
