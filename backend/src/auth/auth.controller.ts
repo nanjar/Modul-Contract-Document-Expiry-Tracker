@@ -15,7 +15,16 @@ export class AuthController {
 
   @Post('login')
   @UseGuards(AuthRateLimitGuard)
-  login(@Body() dto: LoginDto) { return this.auth.login(dto.email, dto.password); }
+  async login(@Body() dto: LoginDto) {
+    try {
+      const result = await this.auth.login(dto.email, dto.password);
+      await this.prisma.auditLog.create({ data: { actorId: result.user.id, action: 'LOGIN_SUCCESS', entity: 'Auth', metadata: { email: result.user.email, source: 'web' } } });
+      return result;
+    } catch (error) {
+      await this.prisma.auditLog.create({ data: { action: 'LOGIN_FAILURE', entity: 'Auth', metadata: { email: dto.email.toLowerCase(), source: 'web' } } });
+      throw error;
+    }
+  }
 
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
@@ -25,5 +34,8 @@ export class AuthController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post('logout')
-  logout() { return { success: true }; }
+  async logout(@Req() req: any) {
+    await this.prisma.auditLog.create({ data: { actorId: req.user.sub, action: 'LOGOUT', entity: 'Auth', metadata: { source: 'web' } } });
+    return { success: true };
+  }
 }
