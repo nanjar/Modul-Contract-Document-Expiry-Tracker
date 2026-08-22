@@ -67,6 +67,9 @@ export default function AuditPage() {
       return;
     }
 
+    // Keep a narrowed, immutable reference for the async callback. TypeScript
+    // cannot safely narrow the outer session variable across an async closure.
+    const currentSession = session;
     const controller = new AbortController();
     let timedOut = false;
     const timeout = window.setTimeout(() => {
@@ -83,7 +86,7 @@ export default function AuditPage() {
         if (entity.trim()) qs.set('entity', entity.trim());
 
         const response = await fetch(`${API_URL}/audit-logs?${qs.toString()}`, {
-          headers: { Authorization: `Bearer ${session.token}` },
+          headers: { Authorization: `Bearer ${currentSession.token}` },
           signal: controller.signal,
           cache: 'no-store',
         });
