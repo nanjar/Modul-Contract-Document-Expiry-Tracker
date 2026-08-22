@@ -16,9 +16,18 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem('expiry-tracker-language');
-    if (stored === 'en' || stored === 'id') setLangState(stored);
+    const sync = () => {
+      const stored = window.localStorage.getItem('expiry-tracker-language');
+      if (stored === 'en' || stored === 'id') setLangState(stored);
+    };
+    sync();
     setReady(true);
+    const timer = window.setInterval(sync, 100);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('storage', sync);
+    };
   }, []);
 
   useEffect(() => {
