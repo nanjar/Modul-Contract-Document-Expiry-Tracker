@@ -51,15 +51,12 @@ export class DashboardService {
         case DocumentStatus.ACTIVE:
           counts.active++;
           break;
-
         case DocumentStatus.EXPIRING_SOON:
           counts.expiringSoon++;
           break;
-
         case DocumentStatus.EXPIRED:
           counts.expired++;
           break;
-
         case DocumentStatus.NO_EXPIRY:
           counts.noExpiry++;
           break;
@@ -76,6 +73,14 @@ export class DashboardService {
         expiryDate: {
           not: null,
         },
+      },
+      select: {
+        id: true,
+        title: true,
+        documentNumber: true,
+        documentType: true,
+        counterparty: true,
+        expiryDate: true,
       },
       orderBy: {
         expiryDate: 'asc',
@@ -99,6 +104,14 @@ export class DashboardService {
     const documents = await this.prisma.document.findMany({
       where: {
         archivedAt: null,
+      },
+      select: {
+        id: true,
+        title: true,
+        documentNumber: true,
+        documentType: true,
+        counterparty: true,
+        expiryDate: true,
       },
       orderBy: {
         createdAt: 'desc',
