@@ -2,12 +2,13 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { AuditModule } from '../audit/audit.module';
 import { RemindersModule } from '../reminders/reminders.module';
+import { SettingsModule } from '../settings/settings.module';
 import { StorageModule } from '../storage/storage.module';
 import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
 
 @Module({
-  imports: [AuthModule, AuditModule, RemindersModule, StorageModule],
+  imports: [AuthModule, AuditModule, RemindersModule, SettingsModule, StorageModule],
   controllers: [DocumentsController],
   providers: [DocumentsService],
   exports: [DocumentsService],
