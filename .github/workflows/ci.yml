@@ -20,8 +20,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: backend/package.json
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm prisma generate
       - run: pnpm test -- --runInBand
@@ -40,7 +38,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: frontend/package.json
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm build
