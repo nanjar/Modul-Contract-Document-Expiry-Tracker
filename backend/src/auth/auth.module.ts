@@ -6,9 +6,21 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { RolesGuard } from './roles.guard';
 
 @Module({
-  imports: [JwtModule.register({ secret: process.env.JWT_SECRET ?? 'change-me', signOptions: { expiresIn: '15m' } })],
+  imports: [
+    JwtModule.register({
+      secret: process.env.JWT_SECRET ?? 'change-me',
+      signOptions: {
+        expiresIn: '15m',
+      },
+    }),
+  ],
   controllers: [AuthController],
   providers: [AuthService, JwtAuthGuard, RolesGuard],
-  exports: [AuthService, JwtAuthGuard, RolesGuard],
+  exports: [
+    AuthService,
+    JwtAuthGuard,
+    RolesGuard,
+    JwtModule,
+  ],
 })
 export class AuthModule {}
