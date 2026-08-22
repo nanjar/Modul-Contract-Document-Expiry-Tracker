@@ -63,6 +63,7 @@ export default function WorkspaceChrome({ children }: Props) {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [role, setRole] = useState<Role>('VIEWER');
   const [query, setQuery] = useState('');
+  const [archiveActive, setArchiveActive] = useState(false);
   const t = (key: Key) => copy[lang][key];
 
   useEffect(() => {
@@ -84,7 +85,13 @@ export default function WorkspaceChrome({ children }: Props) {
   }, [query, router]);
 
   useEffect(() => {
-    if (pathname === '/documents') setQuery(new URLSearchParams(window.location.search).get('search') ?? '');
+    if (pathname === '/documents') {
+      const params = new URLSearchParams(window.location.search);
+      setQuery(params.get('search') ?? '');
+      setArchiveActive(params.get('status') === 'ARCHIVED');
+    } else {
+      setArchiveActive(false);
+    }
   }, [pathname]);
 
   if (pathname === '/') return <>{children}</>;
@@ -102,7 +109,7 @@ export default function WorkspaceChrome({ children }: Props) {
 
   const initials = role === 'SUPERUSER' ? 'AD' : role === 'EDITOR' ? 'ED' : 'VW';
   const active = (href: string) => href === '/documents?status=ARCHIVED'
-    ? pathname === '/documents' && new URLSearchParams(window.location.search).get('status') === 'ARCHIVED'
+    ? pathname === '/documents' && archiveActive
     : pathname === href;
 
   return <div className="workspace-chrome" data-theme={theme}>
