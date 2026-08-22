@@ -4,6 +4,7 @@ import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../auth/roles.guard';
 import { SettingsService } from './settings.service';
+import { UpdateSettingsDto } from './dto/update-settings.dto';
 
 @ApiTags('settings')
 @ApiBearerAuth()
@@ -14,12 +15,8 @@ export class SettingsController {
   constructor(private readonly settings: SettingsService) {}
 
   @Get()
-  get() {
-    return this.settings.getAll();
-  }
+  get() { return this.settings.getAll(); }
 
   @Patch()
-  update(@Body() body: { warningThresholdDays: number }, @Req() req: any) {
-    return this.settings.update(body, req.user.sub);
-  }
+  update(@Body() dto: UpdateSettingsDto, @Req() req: any) { return this.settings.update(dto, req.user.sub); }
 }
