@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UploadedFile,
   UseGuards,
@@ -150,8 +151,6 @@ export class DocumentsController {
         fileSize: file.size,
       }, req.user.sub);
     } catch (error) {
-      // The object was uploaded before the database update. Remove it when
-      // persistence fails so a failed request does not leave an orphaned blob.
       try {
         await this.storage.deleteObject(key);
       } catch {
@@ -164,8 +163,7 @@ export class DocumentsController {
       try {
         await this.storage.deleteObject(document.storageKey);
       } catch {
-        // The database now points at the new object. Old-object cleanup is
-        // best-effort and must not turn a successful upload into a failure.
+        // Best-effort cleanup after the database points at the new object.
       }
     }
 
