@@ -9,5 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body><WorkspaceChrome>{children}</WorkspaceChrome></body></html>;
+  return <html lang="id"><body><WorkspaceChrome>{children}</WorkspaceChrome></body></html>;
 }
