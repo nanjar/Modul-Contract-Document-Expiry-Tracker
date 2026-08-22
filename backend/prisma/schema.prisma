@@ -60,17 +60,19 @@ model Document {
 }
 
 model Reminder {
-  id         String    @id @default(uuid()) @db.Uuid
-  documentId String    @db.Uuid
-  daysBefore Int
-  enabled    Boolean   @default(true)
-  lastSentAt DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id           String    @id @default(uuid()) @db.Uuid
+  documentId   String    @db.Uuid
+  daysBefore   Int
+  enabled      Boolean   @default(true)
+  lastSentAt   DateTime?
+  processingAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, daysBefore])
+  @@index([processingAt])
 }
 
 model AuditLog {
