@@ -80,7 +80,11 @@ export default function WorkspaceChrome({ children }: Props) {
   useEffect(() => {
     const value = query.trim();
     if (!value) return;
-    const timer = window.setTimeout(() => router.push(`/documents?search=${encodeURIComponent(value)}`), 450);
+    const timer = window.setTimeout(() => {
+      const target = `/documents?search=${encodeURIComponent(value)}`;
+      router.push(target);
+      window.dispatchEvent(new CustomEvent('expiry-tracker-search', { detail: value }));
+    }, 450);
     return () => window.clearTimeout(timer);
   }, [query, router]);
 
@@ -99,7 +103,9 @@ export default function WorkspaceChrome({ children }: Props) {
   function search(event: FormEvent) {
     event.preventDefault();
     const value = query.trim();
-    router.push(`/documents${value ? `?search=${encodeURIComponent(value)}` : ''}`);
+    const target = `/documents${value ? `?search=${encodeURIComponent(value)}` : ''}`;
+    router.push(target);
+    if (value) window.dispatchEvent(new CustomEvent('expiry-tracker-search', { detail: value }));
   }
 
   function logout() {
