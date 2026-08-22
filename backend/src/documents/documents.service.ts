@@ -39,7 +39,20 @@ export class DocumentsService {
     const existing = await this.prisma.document.findUnique({ where: { id } }); if (!existing || existing.archivedAt) throw new NotFoundException('Document not found'); if (input.ownerId) await this.assertOwnerExists(input.ownerId);
     const document = await this.prisma.document.update({ where: { id }, data: { ...(input.documentNumber !== undefined && { documentNumber: input.documentNumber.trim() || null }), ...(input.title !== undefined && { title: input.title.trim() }), ...(input.documentType !== undefined && { documentType: input.documentType.trim() }), ...(input.description !== undefined && { description: input.description.trim() || null }), ...(input.counterparty !== undefined && { counterparty: input.counterparty.trim() || null }), ...(input.ownerId !== undefined && { ownerId: input.ownerId }), ...(input.issueDate !== undefined && { issueDate: input.issueDate ? new Date(input.issueDate) : null }), ...(input.effectiveDate !== undefined && { effectiveDate: input.effectiveDate ? new Date(input.effectiveDate) : null }), ...(input.expiryDate !== undefined && { expiryDate: input.expiryDate ? new Date(input.expiryDate) : null }), ...(input.reminderEnabled !== undefined && { reminderEnabled: input.reminderEnabled }) } });
     await this.audit.log({ actorId, action: 'UPDATE', entity: 'Document', entityId: document.id, metadata: { previous: { title: existing.title, documentType: existing.documentType, expiryDate: existing.expiryDate, ownerId: existing.ownerId, reminderEnabled: existing.reminderEnabled }, current: { title: document.title, documentType: document.documentType, expiryDate: document.expiryDate, ownerId: document.ownerId, reminderEnabled: document.reminderEnabled } } });
-    if (document.expiryDate && document.reminderEnabled && (!existing.expiryDate || !existing.reminderEnabled || document.expiryDate.getTime() !== existing.expiryDate.getTime())) await this.reminders.createDefaults(document.id); return this.toResponse(document);
+
+    const expiryChanged =
+      (existing.expiryDate?.getTime() ?? null) !== (document.expiryDate?.getTime() ?? null);
+    const reminderSettingChanged = existing.reminderEnabled !== document.reminderEnabled;
+
+    if (expiryChanged || reminderSettingChanged) {
+      await this.reminders.resetDeliveryState(document.id, document.reminderEnabled);
+    }
+
+    if (document.expiryDate && document.reminderEnabled && (expiryChanged || !existing.expiryDate || !existing.reminderEnabled)) {
+      await this.reminders.createDefaults(document.id);
+    }
+
+    return this.toResponse(document);
   }
 
   async attachFile(id: string, file: { storageKey: string; originalFilename: string; mimeType: string; fileSize: number }, actorId: string) { const existing = await this.prisma.document.findUnique({ where: { id } }); if (!existing || existing.archivedAt) throw new NotFoundException('Document not found'); const document = await this.prisma.document.update({ where: { id }, data: file }); await this.audit.log({ actorId, action: 'UPLOAD_FILE', entity: 'Document', entityId: id, metadata: { originalFilename: file.originalFilename, mimeType: file.mimeType, fileSize: file.fileSize } }); return this.toResponse(document); }
