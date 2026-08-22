@@ -50,6 +50,5 @@ services:
     ports:
       - "3000:3000"
 
-docker compose config
 volumes:
   postgres_data:
