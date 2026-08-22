@@ -113,6 +113,23 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    if (existing.id === actorId && input.isActive === false) {
+      throw new ConflictException('You cannot deactivate your own account');
+    }
+
+    if (existing.id === actorId && input.role && input.role !== existing.role) {
+      throw new ConflictException('You cannot change your own role');
+    }
+
+    const removingSuperuserAccess =
+      existing.role === Role.SUPERUSER &&
+      existing.isActive &&
+      ((input.role !== undefined && input.role !== Role.SUPERUSER) || input.isActive === false);
+
+    if (removingSuperuserAccess) {
+      await this.assertNotLastActiveSuperuser(id);
+    }
+
     const email = input.email?.toLowerCase().trim();
     if (email && email !== existing.email) {
       const duplicate = await this.prisma.user.findUnique({ where: { email } });
@@ -180,6 +197,10 @@ export class UsersService {
       throw new ConflictException('You cannot deactivate your own account');
     }
 
+    if (existing.role === Role.SUPERUSER && existing.isActive) {
+      await this.assertNotLastActiveSuperuser(id);
+    }
+
     const user = await this.prisma.user.update({
       where: { id },
       data: { isActive: false },
@@ -203,5 +224,15 @@ export class UsersService {
     });
 
     return user;
+  }
+
+  private async assertNotLastActiveSuperuser(id: string) {
+    const activeSuperusers = await this.prisma.user.count({
+      where: { role: Role.SUPERUSER, isActive: true },
+    });
+
+    if (activeSuperusers <= 1) {
+      throw new ConflictException('At least one active superuser account must remain');
+    }
   }
 }
