@@ -13,7 +13,16 @@ export class DocumentsService {
     const page = Math.max(1, query?.page ?? 1); const limit = Math.min(100, Math.max(1, query?.limit ?? 20)); const skip = (page - 1) * limit;
     const { today, threshold } = expiryWindow(); const status = query?.status?.trim() as DocumentStatus | undefined;
     const where: any = status === DocumentStatus.ARCHIVED ? { archivedAt: { not: null } } : { archivedAt: null };
-    if (query?.search?.trim()) { const search = query.search.trim(); where.OR = [{ title: { contains: search, mode: 'insensitive' } }, { documentNumber: { contains: search, mode: 'insensitive' } }, { counterparty: { contains: search, mode: 'insensitive' } }]; }
+    if (query?.search?.trim()) {
+      const search = query.search.trim();
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { documentNumber: { contains: search, mode: 'insensitive' } },
+        { counterparty: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { originalFilename: { contains: search, mode: 'insensitive' } },
+      ];
+    }
     if (query?.documentType?.trim()) where.documentType = query.documentType.trim();
     if (query?.expiryFrom || query?.expiryTo) { where.expiryDate = {}; if (query.expiryFrom) where.expiryDate.gte = new Date(query.expiryFrom); if (query.expiryTo) where.expiryDate.lte = new Date(query.expiryTo); }
     if (status === DocumentStatus.NO_EXPIRY) where.expiryDate = null;
@@ -38,7 +47,7 @@ export class DocumentsService {
   async update(id: string, input: any, actorId: string) {
     const existing = await this.prisma.document.findUnique({ where: { id } }); if (!existing || existing.archivedAt) throw new NotFoundException('Document not found'); if (input.ownerId) await this.assertOwnerExists(input.ownerId);
     const document = await this.prisma.document.update({ where: { id }, data: { ...(input.documentNumber !== undefined && { documentNumber: input.documentNumber.trim() || null }), ...(input.title !== undefined && { title: input.title.trim() }), ...(input.documentType !== undefined && { documentType: input.documentType.trim() }), ...(input.description !== undefined && { description: input.description.trim() || null }), ...(input.counterparty !== undefined && { counterparty: input.counterparty.trim() || null }), ...(input.ownerId !== undefined && { ownerId: input.ownerId }), ...(input.issueDate !== undefined && { issueDate: input.issueDate ? new Date(input.issueDate) : null }), ...(input.effectiveDate !== undefined && { effectiveDate: input.effectiveDate ? new Date(input.effectiveDate) : null }), ...(input.expiryDate !== undefined && { expiryDate: input.expiryDate ? new Date(input.expiryDate) : null }), ...(input.reminderEnabled !== undefined && { reminderEnabled: input.reminderEnabled }) } });
-    await this.audit.log({ actorId, action: 'UPDATE', entity: 'Document', entityId: document.id, metadata: { previous: { title: existing.title, documentType: existing.documentType, expiryDate: existing.expiryDate, ownerId: existing.ownerId, reminderEnabled: existing.reminderEnabled }, current: { title: document.title, documentType: document.documentType, expiryDate: document.expiryDate, ownerId: document.ownerId, reminderEnabled: document.reminderEnabled } } });
+    await this.audit.log({ actorId, action: 'UPDATE', entity: 'Document', entityId: document.id, metadata: { previous: { title: existing.title, documentType: existing.documentType, expiryDate: existing.expiryDate, ownerId: existing.ownerId, reminderEnabled: existing.reminderEnabled }, current: { title: document.title, documentType: document.documentType, expiryDate: document.expiryDate, ownerId: document.ownerId, reminderEnabled: document.reminderEnabled } });
 
     const expiryChanged = (existing.expiryDate?.getTime() ?? null) !== (document.expiryDate?.getTime() ?? null);
     const reminderSettingChanged = existing.reminderEnabled !== document.reminderEnabled;
