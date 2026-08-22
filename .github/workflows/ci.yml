@@ -9,6 +9,20 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: expiry_tracker
+          POSTGRES_PASSWORD: expiry_tracker
+          POSTGRES_DB: expiry_tracker
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U expiry_tracker -d expiry_tracker"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       DATABASE_URL: postgresql://expiry_tracker:expiry_tracker@localhost:5432/expiry_tracker?schema=public
       JWT_SECRET: ci-only-test-secret
@@ -26,9 +40,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: pnpm install --no-frozen-lockfile
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
       - run: pnpm exec prisma validate
       - run: pnpm exec prisma generate
+      - run: pnpm exec prisma migrate deploy
       - run: pnpm test -- --runInBand
       - run: pnpm build
 
@@ -48,5 +65,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: pnpm install --no-frozen-lockfile
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
       - run: pnpm build
