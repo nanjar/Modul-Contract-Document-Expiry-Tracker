@@ -13,6 +13,5 @@ ENV NODE_ENV=production
 COPY package.json ./
 RUN pnpm install --prod --no-frozen-lockfile
 COPY --from=build /app/.next ./.next
-COPY --from=build /app/public ./public
 EXPOSE 3000
 CMD ["pnpm", "start"]
