@@ -79,6 +79,18 @@ export default function WorkspaceChrome({ children }: Props) {
   }, [theme]);
 
   useEffect(() => {
+    if (pathname !== '/documents') {
+      setQuery('');
+      setArchiveActive(false);
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    setQuery(params.get('search') ?? '');
+    setArchiveActive(params.get('status') === 'ARCHIVED');
+  }, [pathname]);
+
+  useEffect(() => {
     const value = query.trim();
     if (pathname !== '/documents' && !value) return;
     const timer = window.setTimeout(() => {
