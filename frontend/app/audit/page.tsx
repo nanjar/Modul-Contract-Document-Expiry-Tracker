@@ -1,14 +1,253 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 
-type AuditLog = { id:string; action:string; entity:string; entityId?:string|null; actorUserId?:string|null; metadata?:Record<string,unknown>|null; createdAt:string; actor?:{name:string;email:string}|null };
+type Role = 'SUPERUSER' | 'EDITOR' | 'VIEWER';
+type AuditLog = {
+  id: string;
+  action: string;
+  entity: string;
+  entityId?: string | null;
+  actorUserId?: string | null;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
+  actor?: { id?: string; name?: string; email?: string; role?: Role } | null;
+};
+
+type AuditResponse = {
+  items: AuditLog[];
+  pagination?: { page: number; limit: number; total: number; totalPages: number };
+};
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
-const headers = () => { const token = typeof window !== 'undefined' ? sessionStorage.getItem('expiry-tracker-token') : null; return token ? { Authorization:`Bearer ${token}` } : {}; };
 
-export default function AuditPage(){
- const [logs,setLogs]=useState<AuditLog[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[action,setAction]=useState(''),[entity,setEntity]=useState(''),[page,setPage]=useState(1),[selected,setSelected]=useState<AuditLog|null>(null);
- async function load(){setLoading(true);setError('');try{const qs=new URLSearchParams({page:String(page),limit:'20'});if(action)qs.set('action',action);if(entity)qs.set('entity',entity);const r=await fetch(`${API_URL}/audit-logs?${qs}`,{headers:headers()});if(!r.ok)throw new Error(r.status===403?'Superuser access required':'Unable to load audit logs');const d=await r.json();setLogs(d.items??d)}catch(e){setError(e instanceof Error?e.message:'Unable to load audit logs')}finally{setLoading(false)}}
- useEffect(()=>{load()},[page,action,entity]);
- return <main style={{minHeight:'100vh',background:'#f6f8fc',padding:'32px'}}><div style={{maxWidth:1180,margin:'0 auto'}}><div style={{marginBottom:26}}><div style={{fontSize:12,fontWeight:800,letterSpacing:'.12em',textTransform:'uppercase',color:'#70809b'}}>Security</div><h1 style={{margin:'7px 0',fontSize:32,color:'#17213a'}}>Audit log</h1><p style={{margin:0,color:'#718096'}}>Review administrative and document activity captured by the system.</p></div><div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:16}}><input value={action} onChange={e=>{setPage(1);setAction(e.target.value)}} placeholder="Filter action…" style={{padding:'11px 13px',border:'1px solid #dfe5ee',borderRadius:10,background:'#fff'}}/><input value={entity} onChange={e=>{setPage(1);setEntity(e.target.value)}} placeholder="Filter entity…" style={{padding:'11px 13px',border:'1px solid #dfe5ee',borderRadius:10,background:'#fff'}}/></div>{error&&<div style={{padding:14,borderRadius:12,background:'#fff0f0',color:'#b42318',marginBottom:16}}>{error}</div>}<div style={{background:'#fff',border:'1px solid #e8ecf2',borderRadius:18,overflow:'hidden',boxShadow:'0 12px 30px rgba(25,40,70,.05)'}}>{loading?<div style={{padding:40,color:'#718096'}}>Loading audit events…</div>:logs.length===0?<div style={{padding:50,textAlign:'center',color:'#718096'}}>No audit events match these filters.</div>:<div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr>{['Time','Action','Entity','Actor',''].map((h,i)=><th key={i} style={{textAlign:'left',padding:'15px 20px',fontSize:11,textTransform:'uppercase',letterSpacing:'.08em',color:'#8a96a8',borderBottom:'1px solid #edf0f5'}}>{h}</th>)}</tr></thead><tbody>{logs.map(l=><tr key={l.id}><td style={{padding:'16px 20px',borderBottom:'1px solid #f0f2f6',fontSize:13,color:'#718096'}}>{new Date(l.createdAt).toLocaleString()}</td><td style={{padding:'16px 20px',borderBottom:'1px solid #f0f2f6',fontWeight:800,color:'#273657'}}>{l.action}</td><td style={{padding:'16px 20px',borderBottom:'1px solid #f0f2f6'}}><div style={{fontWeight:700}}>{l.entity}</div><div style={{fontSize:12,color:'#8792a4'}}>{l.entityId??'—'}</div></td><td style={{padding:'16px 20px',borderBottom:'1px solid #f0f2f6',fontSize:13}}>{l.actor?.name??l.actor?.email??l.actorUserId??'System'}</td><td style={{padding:'16px 20px',borderBottom:'1px solid #f0f2f6'}}><button onClick={()=>setSelected(l)} style={{border:0,background:'transparent',color:'#4c6fff',fontWeight:800,cursor:'pointer'}}>Details</button></td></tr>)}</tbody></table></div>}</div><div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:16}}><button disabled={page<=1} onClick={()=>setPage(p=>p-1)} style={{padding:'9px 14px',border:'1px solid #dfe5ee',borderRadius:9,background:'#fff'}}>Previous</button><span style={{padding:'10px 6px',fontSize:13,color:'#718096'}}>Page {page}</span><button disabled={logs.length<20} onClick={()=>setPage(p=>p+1)} style={{padding:'9px 14px',border:'1px solid #dfe5ee',borderRadius:9,background:'#fff'}}>Next</button></div>{selected&&<div onClick={()=>setSelected(null)} style={{position:'fixed',inset:0,background:'rgba(15,23,42,.42)',display:'grid',placeItems:'center',padding:20,zIndex:50}}><div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:620,background:'#fff',borderRadius:20,padding:28}}><div style={{display:'flex',justifyContent:'space-between'}}><div><h2 style={{margin:0,color:'#17213a'}}>Audit event</h2><p style={{margin:'6px 0 20px',color:'#718096',fontSize:13}}>{new Date(selected.createdAt).toLocaleString()}</p></div><button onClick={()=>setSelected(null)} style={{border:0,background:'transparent',fontSize:22}}>×</button></div><pre style={{background:'#f7f9fc',borderRadius:12,padding:16,overflow:'auto',fontSize:12}}>{JSON.stringify(selected,null,2)}</pre></div></div>}</div></main>;
+function getSession() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const token = sessionStorage.getItem('expiry-tracker-token');
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return { token, role: payload.role as Role };
+  } catch {
+    return null;
+  }
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
+export default function AuditPage() {
+  const session = useMemo(() => getSession(), []);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [action, setAction] = useState('');
+  const [entity, setEntity] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [selected, setSelected] = useState<AuditLog | null>(null);
+
+  useEffect(() => {
+    if (!session) {
+      setLoading(false);
+      setError('Your session is missing or expired. Please sign in again.');
+      return;
+    }
+
+    if (session.role !== 'SUPERUSER') {
+      setLoading(false);
+      setError('Superuser access required.');
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10000);
+
+    async function load() {
+      setLoading(true);
+      setError('');
+      try {
+        const qs = new URLSearchParams({ page: String(page), limit: '20' });
+        if (action.trim()) qs.set('action', action.trim());
+        if (entity.trim()) qs.set('entity', entity.trim());
+
+        const response = await fetch(`${API_URL}/audit-logs?${qs.toString()}`, {
+          headers: { Authorization: `Bearer ${session.token}` },
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) throw new Error('Session expired. Please sign in again.');
+          if (response.status === 403) throw new Error('Superuser access required.');
+          throw new Error(`Unable to load audit logs (HTTP ${response.status}).`);
+        }
+
+        const data = (await response.json()) as AuditResponse | AuditLog[];
+        if (Array.isArray(data)) {
+          setLogs(data);
+          setTotal(data.length);
+          setTotalPages(data.length >= 20 ? page + 1 : page);
+        } else {
+          setLogs(data.items ?? []);
+          setTotal(data.pagination?.total ?? data.items?.length ?? 0);
+          setTotalPages(data.pagination?.totalPages ?? 1);
+        }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          setError('The audit log request timed out. Check that the backend and database are running.');
+        } else {
+          setError(err instanceof Error ? err.message : 'Unable to load audit logs.');
+        }
+      } finally {
+        window.clearTimeout(timeout);
+        setLoading(false);
+      }
+    }
+
+    void load();
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [session, page, action, entity]);
+
+  if (!session) {
+    return (
+      <main className="workspace">
+        <div className="workspace-head">
+          <p className="eyebrow">SECURITY</p>
+          <h1>Audit log</h1>
+          <p>Your session is missing or expired.</p>
+          <Link href="/" className="primary-button compact">Return to sign in</Link>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="workspace">
+      <div className="workspace-head" style={{ marginBottom: 26 }}>
+        <div>
+          <p className="eyebrow">SECURITY</p>
+          <h1>Audit log</h1>
+          <p>Review administrative and document activity captured by the system.</p>
+        </div>
+      </div>
+
+      <div className="toolbar" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        <input
+          value={action}
+          onChange={(event) => { setPage(1); setAction(event.target.value); }}
+          placeholder="Filter action…"
+          className="search"
+          style={{ flex: '1 1 260px', minWidth: 220 }}
+        />
+        <input
+          value={entity}
+          onChange={(event) => { setPage(1); setEntity(event.target.value); }}
+          placeholder="Filter entity…"
+          className="search"
+          style={{ flex: '1 1 220px', minWidth: 180 }}
+        />
+      </div>
+
+      {error && <div className="inline-error" style={{ marginBottom: 16 }}>{error}</div>}
+
+      <div className="table-card">
+        <div className="table-meta">
+          <strong>{total} audit events</strong>
+          <span>{loading ? 'Loading…' : `Page ${page} of ${totalPages}`}</span>
+        </div>
+
+        {loading ? (
+          <div className="empty-state">
+            <strong>Loading audit events…</strong>
+            <p>Fetching the latest security activity.</p>
+          </div>
+        ) : logs.length === 0 ? (
+          <div className="empty-state">
+            <strong>No audit events</strong>
+            <p>No events match the current filters.</p>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  {['Time', 'Action', 'Entity', 'Actor', ''].map((heading, index) => (
+                    <th key={`${heading}-${index}`} style={{ textAlign: 'left', padding: '15px 20px' }}>
+                      {heading}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((log) => (
+                  <tr key={log.id}>
+                    <td style={{ padding: '16px 20px', fontSize: 12 }}>{formatDate(log.createdAt)}</td>
+                    <td style={{ padding: '16px 20px', fontWeight: 800 }}>{log.action}</td>
+                    <td style={{ padding: '16px 20px' }}>
+                      <div style={{ fontWeight: 700 }}>{log.entity}</div>
+                      <div style={{ fontSize: 11, color: 'var(--chrome-muted)', marginTop: 4 }}>{log.entityId ?? '—'}</div>
+                    </td>
+                    <td style={{ padding: '16px 20px', fontSize: 12 }}>
+                      {log.actor?.name ?? log.actor?.email ?? log.actorUserId ?? 'System'}
+                    </td>
+                    <td style={{ padding: '16px 20px' }}>
+                      <button
+                        onClick={() => setSelected(log)}
+                        style={{ border: 0, background: 'transparent', color: 'var(--chrome-accent)', fontWeight: 800 }}
+                      >
+                        Details
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="pagination" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginTop: 16 }}>
+        <button disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)}>Previous</button>
+        <span>Page {page} / {totalPages}</span>
+        <button disabled={page >= totalPages || loading} onClick={() => setPage((value) => value + 1)}>Next</button>
+      </div>
+
+      {selected && (
+        <div
+          onClick={() => setSelected(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,15,.68)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 50 }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{ width: '100%', maxWidth: 680, background: 'var(--chrome-surface)', color: 'var(--chrome-text)', border: '1px solid var(--chrome-border)', borderRadius: 20, padding: 28, boxShadow: '0 30px 90px rgba(0,0,0,.35)' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
+              <div>
+                <p className="eyebrow" style={{ margin: 0 }}>AUDIT EVENT</p>
+                <h2 style={{ margin: '7px 0 4px' }}>{selected.action}</h2>
+                <p style={{ margin: 0, color: 'var(--chrome-muted)', fontSize: 12 }}>{formatDate(selected.createdAt)}</p>
+              </div>
+              <button onClick={() => setSelected(null)} style={{ border: 0, background: 'transparent', color: 'var(--chrome-muted)', fontSize: 24 }}>×</button>
+            </div>
+            <pre style={{ marginTop: 22, background: 'var(--chrome-surface-2)', border: '1px solid var(--chrome-border)', borderRadius: 12, padding: 16, overflow: 'auto', fontSize: 12, color: 'var(--chrome-text)' }}>
+              {JSON.stringify(selected, null, 2)}
+            </pre>
+          </div>
+        </div>
+      )}
+    </main>
+  );
 }
