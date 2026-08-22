@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import '../components/workspace-chrome.css';
 import WorkspaceChrome from '../components/WorkspaceChrome';
+import { LanguageProvider } from '../components/LanguageProvider';
 
 export const metadata: Metadata = {
   title: 'Expiry Tracker',
@@ -9,5 +10,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="id"><body><WorkspaceChrome>{children}</WorkspaceChrome></body></html>;
+  return <html lang="id"><body><LanguageProvider><WorkspaceChrome>{children}</WorkspaceChrome></LanguageProvider></body></html>;
 }
