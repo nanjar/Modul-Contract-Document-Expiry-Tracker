@@ -2,221 +2,31 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
-type Summary = {
-  total: number;
-  active: number;
-  expiringSoon: number;
-  expired: number;
-  noExpiry: number;
-};
-
-type DocumentItem = {
-  id: string;
-  title: string;
-  documentNumber?: string | null;
-  documentType: string;
-  counterparty?: string | null;
-  expiryDate?: string | null;
-  status: 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' | 'NO_EXPIRY' | 'ARCHIVED';
-};
-
+type Lang = 'en' | 'id';
+type Summary = { total: number; active: number; expiringSoon: number; expired: number; noExpiry: number };
+type DocumentItem = { id: string; title: string; documentNumber?: string | null; documentType: string; counterparty?: string | null; expiryDate?: string | null; status: 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' | 'NO_EXPIRY' | 'ARCHIVED' };
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
 const emptySummary: Summary = { total: 0, active: 0, expiringSoon: 0, expired: 0, noExpiry: 0 };
-
-function formatDate(value?: string | null) {
-  if (!value) return 'No expiry';
-  return new Intl.DateTimeFormat('en', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
-}
-
-function statusLabel(status: DocumentItem['status']) {
-  return status.replaceAll('_', ' ');
-}
-
-function BrandIcon({ small = false }: { small?: boolean }) {
-  return (
-    <span className={`brand-icon${small ? ' small' : ''}`} aria-hidden="true">
-      <svg viewBox="0 0 48 48" fill="none">
-        <rect x="2" y="2" width="44" height="44" rx="13" fill="url(#brand-gradient)" />
-        <path d="M16 11h11l7 7v19H16V11Z" fill="white" fillOpacity=".98" />
-        <path d="M27 11v8h8" fill="white" fillOpacity=".7" />
-        <path d="m24 24 2.8 2.8L33 20.6" stroke="#4E6BFF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M20 32h13" stroke="#D8DEFF" strokeWidth="2.5" strokeLinecap="round" />
-        <defs><linearGradient id="brand-gradient" x1="6" y1="4" x2="42" y2="44"><stop stopColor="#4C6FFF"/><stop offset="1" stopColor="#8B4DFF"/></linearGradient></defs>
-      </svg>
-    </span>
-  );
-}
-
-function FieldIcon({ type }: { type: 'email' | 'password' }) {
-  return type === 'email' ? (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8"/><path d="M5 20c.7-3.4 3-5 7-5s6.3 1.6 7 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
-  ) : (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="1.8"/><circle cx="12" cy="15" r="1.2" fill="currentColor"/></svg>
-  );
-}
-
-function FeatureIcon({ kind }: { kind: 'calendar' | 'bell' | 'shield' | 'chart' }) {
-  const paths = {
-    calendar: <><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></>,
-    bell: <><path d="M18 10a6 6 0 0 0-12 0c0 7-3 7-3 8h18c0-1-3-1-3-8Z"/><path d="M10 21h4"/></>,
-    shield: <><path d="M12 3 19 6v5c0 5-3.2 8.4-7 10-3.8-1.6-7-5-7-10V6l7-3Z"/><path d="m9 12 2 2 4-4"/></>,
-    chart: <><path d="M5 19V11M12 19V6M19 19V3"/><path d="M3 19h18"/></>,
-  };
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[kind]}</svg>;
-}
+const tr = { en: { product:'Contract & Document Expiry Tracker',secure:'Secure workspace',welcome:'Welcome back',signInAccount:'Sign in to your account',email:'Email',password:'Password',signIn:'Sign in',signingIn:'Signing in…',or:'OR',google:'Sign in with Google',protected:'Protected with JWT authentication and server-side role enforcement.',stay:'Stay ahead of',expiry:'every expiry.',description:'A focused command center for contracts, licenses, certificates, permits, and critical business documents.',track:'Track Expiry',trackText:'Never miss a deadline',alerts:'Smart Alerts',alertsText:'Get notified on time',secureRole:'Secure & Role-based',secureRoleText:'Protected with JWT & RBAC',insights:'Business Insights',insightsText:'Make informed decisions',overview:'Overview',documents:'Documents',reminders:'Reminders',audit:'Audit log',command:'Command center',signOut:'Sign out',total:'Total documents',active:'Active',expiringSoon:'Expiring soon',expired:'Expired',goodMorning:'Good morning',goodAfternoon:'Good afternoon',goodEvening:'Good evening',dashboardCopy:'Keep every important document ahead of its expiry date.',add:'Add document',priority:'Priority',attention:'Needs attention',activity:'Activity',recent:'Recently added',viewAll:'View all',refreshing:'Refreshing your document health…',allClear:'All clear.',noAttention:'No expired or soon-to-expire documents found.',noDocs:'No documents yet.',addFirst:'Add your first document to start tracking expiry dates.',activeInsight:'active documents',activeInsightText:'are currently outside the 30-day warning window.',attentionInsight:'require attention',attentionInsightText:'based on the current expiry status.',noExpiryInsight:'without expiry',noExpiryInsightText:'can still be tracked without reminders.',noExpiry:'No expiry',archived:'Archived',statusActive:'Active',statusExpiring:'Expiring soon',statusExpired:'Expired',language:'Language',loginFailed:'Login failed',dashboardFailed:'Unable to load dashboard data'}, id: { product:'Pelacak Masa Berlaku Kontrak & Dokumen',secure:'Ruang kerja aman',welcome:'Selamat datang kembali',signInAccount:'Masuk ke akun Anda',email:'Email',password:'Kata sandi',signIn:'Masuk',signingIn:'Sedang masuk…',or:'ATAU',google:'Masuk dengan Google',protected:'Dilindungi autentikasi JWT dan penegakan role di sisi server.',stay:'Tetap terdepan dari',expiry:'setiap masa berlaku.',description:'Command center terfokus untuk kontrak, lisensi, sertifikat, izin, dan dokumen bisnis penting.',track:'Pantau Masa Berlaku',trackText:'Jangan lewatkan tenggat',alerts:'Notifikasi Cerdas',alertsText:'Dapatkan pengingat tepat waktu',secureRole:'Aman & Berbasis Role',secureRoleText:'Dilindungi JWT & RBAC',insights:'Insight Bisnis',insightsText:'Ambil keputusan lebih baik',overview:'Ringkasan',documents:'Dokumen',reminders:'Pengingat',audit:'Log audit',command:'Command center',signOut:'Keluar',total:'Total dokumen',active:'Aktif',expiringSoon:'Segera berakhir',expired:'Sudah berakhir',goodMorning:'Selamat pagi',goodAfternoon:'Selamat siang',goodEvening:'Selamat malam',dashboardCopy:'Pastikan setiap dokumen penting tetap terpantau sebelum masa berlakunya berakhir.',add:'Tambah dokumen',priority:'Prioritas',attention:'Perlu perhatian',activity:'Aktivitas',recent:'Baru ditambahkan',viewAll:'Lihat semua',refreshing:'Memperbarui kesehatan dokumen…',allClear:'Semua aman.',noAttention:'Tidak ada dokumen yang sudah atau segera berakhir.',noDocs:'Belum ada dokumen.',addFirst:'Tambahkan dokumen pertama untuk mulai memantau masa berlaku.',activeInsight:'dokumen aktif',activeInsightText:'saat ini berada di luar jendela peringatan 30 hari.',attentionInsight:'perlu perhatian',attentionInsightText:'berdasarkan status masa berlaku saat ini.',noExpiryInsight:'tanpa masa berlaku',noExpiryInsightText:'tetap dapat dipantau tanpa pengingat.',noExpiry:'Tanpa masa berlaku',archived:'Diarsipkan',statusActive:'Aktif',statusExpiring:'Segera berakhir',statusExpired:'Sudah berakhir',language:'Bahasa',loginFailed:'Login gagal',dashboardFailed:'Gagal memuat data dashboard'} } as const;
+type Key = keyof typeof tr.en;
+function formatDate(value: string | null | undefined, lang: Lang) { if (!value) return tr[lang].noExpiry; return new Intl.DateTimeFormat(lang==='id'?'id-ID':'en-US',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(value)); }
+function statusLabel(status: DocumentItem['status'], lang: Lang) { const map: Record<DocumentItem['status'], Key> = { ACTIVE:'statusActive',EXPIRING_SOON:'statusExpiring',EXPIRED:'statusExpired',NO_EXPIRY:'noExpiry',ARCHIVED:'archived' }; return tr[lang][map[status]]; }
+function BrandIcon({small=false}:{small?:boolean}) { return <span className={`brand-icon${small?' small':''}`} aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><rect x="2" y="2" width="44" height="44" rx="13" fill="url(#brand-gradient)"/><path d="M16 11h11l7 7v19H16V11Z" fill="white"/><path d="M27 11v8h8" fill="white" fillOpacity=".7"/><path d="m24 24 2.8 2.8L33 20.6" stroke="#4E6BFF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/><path d="M20 32h13" stroke="#D8DEFF" strokeWidth="2.5" strokeLinecap="round"/><defs><linearGradient id="brand-gradient" x1="6" y1="4" x2="42" y2="44"><stop stopColor="#4C6FFF"/><stop offset="1" stopColor="#8B4DFF"/></linearGradient></defs></svg></span>; }
+function FieldIcon({type}:{type:'email'|'password'}) { return type==='email'?<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8"/><path d="M5 20c.7-3.4 3-5 7-5s6.3 1.6 7 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>:<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="1.8"/><circle cx="12" cy="15" r="1.2" fill="currentColor"/></svg>; }
+function FeatureIcon({kind}:{kind:'calendar'|'bell'|'shield'|'chart'}) { const p={calendar:<><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></>,bell:<><path d="M18 10a6 6 0 0 0-12 0c0 7-3 7-3 8h18c0-1-3-1-3-8Z"/><path d="M10 21h4"/></>,shield:<><path d="M12 3 19 6v5c0 5-3.2 8.4-7 10-3.8-1.6-7-5-7-10V6l7-3Z"/><path d="m9 12 2 2 4-4"/></>,chart:<><path d="M5 19V11M12 19V6M19 19V3"/><path d="M3 19h18"/></>}; return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{p[kind]}</svg>; }
+function Feature({kind,title,text}:{kind:'calendar'|'bell'|'shield'|'chart';title:string;text:string}) { return <div className="feature"><span className={`feature-icon ${kind}`}><FeatureIcon kind={kind}/></span><strong>{title}</strong><span>{text}</span></div>; }
+function LanguageSwitch({lang,setLang,label}:{lang:Lang;setLang:(lang:Lang)=>void;label:string}) { return <div style={{display:'flex',alignItems:'center',gap:4}} aria-label={label}><span style={{fontSize:10,color:'#7f8ba0',marginRight:2}}>{label}</span>{(['en','id'] as Lang[]).map(value=><button key={value} type="button" onClick={()=>setLang(value)} style={{border:0,borderRadius:8,padding:'6px 8px',background:lang===value?'#273657':'transparent',color:lang===value?'#fff':'#7f8ba0',fontSize:10,fontWeight:800}}>{value.toUpperCase()}</button>)}</div>; }
 
 export default function Home() {
-  const [token, setToken] = useState<string | null>(null);
-  const [email, setEmail] = useState('admin@example.com');
-  const [password, setPassword] = useState('Admin123!');
-  const [showPassword, setShowPassword] = useState(false);
-  const [summary, setSummary] = useState<Summary>(emptySummary);
-  const [expiring, setExpiring] = useState<DocumentItem[]>([]);
-  const [recent, setRecent] = useState<DocumentItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loginError, setLoginError] = useState('');
-  const [dataError, setDataError] = useState('');
-
-  useEffect(() => {
-    const stored = window.sessionStorage.getItem('expiry-tracker-token');
-    if (stored) setToken(stored);
-  }, []);
-
-  useEffect(() => {
-    if (!token) return;
-    const load = async () => {
-      setLoading(true);
-      setDataError('');
-      try {
-        const headers = { Authorization: `Bearer ${token}` };
-        const [summaryResponse, expiringResponse, recentResponse] = await Promise.all([
-          fetch(`${API_URL}/dashboard/summary`, { headers }),
-          fetch(`${API_URL}/dashboard/expiring?limit=6`, { headers }),
-          fetch(`${API_URL}/dashboard/recent?limit=6`, { headers }),
-        ]);
-        if ([summaryResponse, expiringResponse, recentResponse].some((response) => response.status === 401)) {
-          window.sessionStorage.removeItem('expiry-tracker-token');
-          setToken(null);
-          return;
-        }
-        if (!summaryResponse.ok || !expiringResponse.ok || !recentResponse.ok) throw new Error('Unable to load dashboard data');
-        setSummary(await summaryResponse.json());
-        setExpiring(await expiringResponse.json());
-        setRecent(await recentResponse.json());
-      } catch (error) {
-        setDataError(error instanceof Error ? error.message : 'Unable to load dashboard data');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [token]);
-
-  const greeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  }, []);
-
-  async function login(event: FormEvent) {
-    event.preventDefault();
-    setLoading(true);
-    setLoginError('');
-    try {
-      const response = await fetch(`${API_URL}/auth/login`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.message ?? 'Login failed');
-      window.sessionStorage.setItem('expiry-tracker-token', payload.accessToken);
-      setToken(payload.accessToken);
-    } catch (error) {
-      setLoginError(error instanceof Error ? error.message : 'Login failed');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function logout() {
-    window.sessionStorage.removeItem('expiry-tracker-token');
-    setToken(null); setSummary(emptySummary); setExpiring([]); setRecent([]);
-  }
-
-  if (!token) {
-    return (
-      <main className="auth-shell">
-        <section className="auth-visual">
-          <div className="visual-glow" />
-          <div className="visual-content">
-            <BrandIcon />
-            <p className="eyebrow">Contract & Document Expiry Tracker</p>
-            <h1>Stay ahead of<br />every expiry.</h1>
-            <p className="auth-copy">A focused command center for contracts, licenses, certificates, permits, and critical business documents.</p>
-            <div className="feature-grid">
-              <Feature kind="calendar" title="Track Expiry" text="Never miss a deadline" />
-              <Feature kind="bell" title="Smart Alerts" text="Get notified on time" />
-              <Feature kind="shield" title="Secure & Role-based" text="Protected with JWT & RBAC" />
-              <Feature kind="chart" title="Business Insights" text="Make informed decisions" />
-            </div>
-          </div>
-          <p className="copyright">© 2026 Contract & Document Expiry Tracker. All rights reserved.</p>
-        </section>
-
-        <section className="auth-panel">
-          <div className="auth-form-card">
-            <div className="mobile-brand"><BrandIcon small /></div>
-            <p className="eyebrow">Secure workspace</p>
-            <h2>Welcome back</h2>
-            <p className="form-subtitle">Sign in to your account</p>
-            <form onSubmit={login} className="login-form">
-              <label>Email
-                <span className="input-wrap"><FieldIcon type="email" /><input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" /></span>
-              </label>
-              <label>Password
-                <span className="input-wrap"><FieldIcon type="password" /><input value={password} onChange={(event) => setPassword(event.target.value)} type={showPassword ? 'text' : 'password'} autoComplete="current-password" /><button type="button" className="password-toggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}><svg viewBox="0 0 24 24" fill="none"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg></button></span>
-              </label>
-              {loginError && <div className="error-banner"><span>!</span>{loginError}</div>}
-              <button className="primary-button auth-submit" disabled={loading}><span>{loading ? 'Signing in…' : 'Sign in'}</span><svg viewBox="0 0 24 24" fill="none"><path d="M10 17l5-5-5-5M15 12H3M20 5v14"/></svg></button>
-            </form>
-            <div className="or-divider"><span>OR</span></div>
-            <button className="google-button" type="button" disabled><span className="google-g">G</span>Sign in with Google</button>
-            <div className="security-note"><span><FeatureIcon kind="shield" /></span><p>Protected with JWT authentication<br />and server-side role enforcement.</p></div>
-          </div>
-        </section>
-      </main>
-    );
-  }
-
-  const metrics = [
-    ['Total documents', summary.total, 'total'], ['Active', summary.active, 'active'], ['Expiring soon', summary.expiringSoon, 'warning'], ['Expired', summary.expired, 'danger'],
-  ];
-
-  return (
-    <main className="app-shell">
-      <aside className="sidebar">
-        <div className="brand"><BrandIcon small /><span>Expiry Tracker</span></div>
-        <nav><a className="nav-item active" href="#dashboard">Overview</a><a className="nav-item" href="#documents">Documents</a><a className="nav-item" href="#reminders">Reminders</a><a className="nav-item" href="#audit">Audit log</a></nav>
-        <div className="sidebar-bottom"><span className="role-chip">Command center</span><button className="nav-item logout" onClick={logout}>Sign out</button></div>
-      </aside>
-      <div className="content">
-        <header className="topbar"><div><p className="eyebrow">Overview</p><h1>{greeting}.</h1><p>Keep every important document ahead of its expiry date.</p></div><button className="primary-button compact">+ Add document</button></header>
-        {dataError && <div className="error-banner page-error">{dataError}</div>}
-        <section className="metrics-grid" id="dashboard">{metrics.map(([label, value, tone]) => <article className={`metric-card ${tone}`} key={label}><span>{label}</span><strong>{value}</strong></article>)}</section>
-        <section className="dashboard-grid">
-          <article className="panel attention" id="reminders"><div className="panel-heading"><div><p className="eyebrow">Priority</p><h2>Needs attention</h2></div><span className="count-badge">{expiring.length}</span></div>{loading ? <div className="empty-state">Refreshing your document health…</div> : expiring.length === 0 ? <div className="empty-state"><strong>All clear.</strong><span>No expired or soon-to-expire documents found.</span></div> : <div className="document-list">{expiring.map((document) => <DocumentRow key={document.id} document={document} />)}</div>}</article>
-          <article className="panel" id="documents"><div className="panel-heading"><div><p className="eyebrow">Activity</p><h2>Recently added</h2></div><a href="#documents">View all</a></div>{recent.length === 0 ? <div className="empty-state"><strong>No documents yet.</strong><span>Add your first document to start tracking expiry dates.</span></div> : <div className="document-list">{recent.map((document) => <DocumentRow key={document.id} document={document} />)}</div>}</article>
-        </section>
-        <section className="insight-strip"><div><span className="insight-icon">✓</span><div><strong>{summary.active} active documents</strong><span>are currently outside the 30-day warning window.</span></div></div><div><span className="insight-icon">!</span><div><strong>{summary.expiringSoon + summary.expired} require attention</strong><span>based on the current expiry status.</span></div></div><div><span className="insight-icon">∞</span><div><strong>{summary.noExpiry} without expiry</strong><span>can still be tracked without reminders.</span></div></div></section>
-      </div>
-    </main>
-  );
+  const [lang,setLang]=useState<Lang>('en'); const [token,setToken]=useState<string|null>(null); const [email,setEmail]=useState('admin@example.com'); const [password,setPassword]=useState('Admin123!'); const [showPassword,setShowPassword]=useState(false); const [summary,setSummary]=useState<Summary>(emptySummary); const [expiring,setExpiring]=useState<DocumentItem[]>([]); const [recent,setRecent]=useState<DocumentItem[]>([]); const [loading,setLoading]=useState(false); const [loginError,setLoginError]=useState(''); const [dataError,setDataError]=useState(''); const t=(key:Key)=>tr[lang][key];
+  useEffect(()=>{const stored=window.sessionStorage.getItem('expiry-tracker-token');if(stored)setToken(stored);const storedLang=window.localStorage.getItem('expiry-tracker-language') as Lang|null;if(storedLang==='en'||storedLang==='id')setLang(storedLang);},[]);
+  function changeLang(value:Lang){setLang(value);window.localStorage.setItem('expiry-tracker-language',value);}
+  useEffect(()=>{if(!token)return;const load=async()=>{setLoading(true);setDataError('');try{const headers={Authorization:`Bearer ${token}`};const [a,b,c]=await Promise.all([fetch(`${API_URL}/dashboard/summary`,{headers}),fetch(`${API_URL}/dashboard/expiring?limit=6`,{headers}),fetch(`${API_URL}/dashboard/recent?limit=6`,{headers})]);if([a,b,c].some(r=>r.status===401)){window.sessionStorage.removeItem('expiry-tracker-token');setToken(null);return;}if(!a.ok||!b.ok||!c.ok)throw new Error(t('dashboardFailed'));setSummary(await a.json());setExpiring(await b.json());setRecent(await c.json());}catch(error){setDataError(error instanceof Error?error.message:t('dashboardFailed'));}finally{setLoading(false);}};load();},[token,lang]);
+  const greeting=useMemo(()=>{const hour=new Date().getHours();return hour<12?t('goodMorning'):hour<18?t('goodAfternoon'):t('goodEvening');},[lang]);
+  async function login(event:FormEvent){event.preventDefault();setLoading(true);setLoginError('');try{const response=await fetch(`${API_URL}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});const payload=await response.json();if(!response.ok)throw new Error(payload.message??t('loginFailed'));window.sessionStorage.setItem('expiry-tracker-token',payload.accessToken);setToken(payload.accessToken);}catch(error){setLoginError(error instanceof Error?error.message:t('loginFailed'));}finally{setLoading(false);}}
+  function logout(){window.sessionStorage.removeItem('expiry-tracker-token');setToken(null);setSummary(emptySummary);setExpiring([]);setRecent([]);}
+  if(!token)return <main className="auth-shell"><section className="auth-visual"><div className="visual-glow"/><div className="visual-content"><BrandIcon/><p className="eyebrow">{t('product')}</p><h1>{t('stay')}<br/>{t('expiry')}</h1><p className="auth-copy">{t('description')}</p><div className="feature-grid"><Feature kind="calendar" title={t('track')} text={t('trackText')}/><Feature kind="bell" title={t('alerts')} text={t('alertsText')}/><Feature kind="shield" title={t('secureRole')} text={t('secureRoleText')}/><Feature kind="chart" title={t('insights')} text={t('insightsText')}/></div></div><p className="copyright">© 2026 Contract & Document Expiry Tracker. All rights reserved.</p></section><section className="auth-panel"><div style={{position:'absolute',top:24,right:28}}><LanguageSwitch lang={lang} setLang={changeLang} label={t('language')}/></div><div className="auth-form-card"><div className="mobile-brand"><BrandIcon small/></div><p className="eyebrow">{t('secure')}</p><h2>{t('welcome')}</h2><p className="form-subtitle">{t('signInAccount')}</p><form onSubmit={login} className="login-form"><label>{t('email')}<span className="input-wrap"><FieldIcon type="email"/><input value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="email"/></span></label><label>{t('password')}<span className="input-wrap"><FieldIcon type="password"/><input value={password} onChange={e=>setPassword(e.target.value)} type={showPassword?'text':'password'} autoComplete="current-password"/><button type="button" className="password-toggle" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?'Hide password':'Show password'}><svg viewBox="0 0 24 24" fill="none"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg></button></span></label>{loginError&&<div className="error-banner"><span>!</span>{loginError}</div>}<button className="primary-button auth-submit" disabled={loading}><span>{loading?t('signingIn'):t('signIn')}</span><svg viewBox="0 0 24 24" fill="none"><path d="M10 17l5-5-5-5M15 12H3M20 5v14"/></svg></button></form><div className="or-divider"><span>{t('or')}</span></div><button className="google-button" type="button" disabled><span className="google-g">G</span>{t('google')}</button><div className="security-note"><span><FeatureIcon kind="shield"/></span><p>{t('protected')}</p></div></div></section></main>;
+  const metrics=[[t('total'),summary.total,'total'],[t('active'),summary.active,'active'],[t('expiringSoon'),summary.expiringSoon,'warning'],[t('expired'),summary.expired,'danger']] as const;
+  return <main className="app-shell"><aside className="sidebar"><div className="brand"><BrandIcon small/><span>Expiry Tracker</span></div><nav><a className="nav-item active" href="#dashboard">{t('overview')}</a><a className="nav-item" href="#documents">{t('documents')}</a><a className="nav-item" href="#reminders">{t('reminders')}</a><a className="nav-item" href="#audit">{t('audit')}</a></nav><div className="sidebar-bottom"><span className="role-chip">{t('command')}</span><button className="nav-item logout" onClick={logout}>{t('signOut')}</button></div></aside><div className="content"><header className="topbar"><div><p className="eyebrow">{t('overview')}</p><h1>{greeting}.</h1><p>{t('dashboardCopy')}</p></div><div style={{display:'flex',alignItems:'center',gap:12}}><LanguageSwitch lang={lang} setLang={changeLang} label={t('language')}/><button className="primary-button compact">+ {t('add')}</button></div></header>{dataError&&<div className="error-banner page-error">{dataError}</div>}<section className="metrics-grid" id="dashboard">{metrics.map(([label,value,tone])=><article className={`metric-card ${tone}`} key={label}><span>{label}</span><strong>{value}</strong></article>)}</section><section className="dashboard-grid"><article className="panel attention" id="reminders"><div className="panel-heading"><div><p className="eyebrow">{t('priority')}</p><h2>{t('attention')}</h2></div><span className="count-badge">{expiring.length}</span></div>{loading?<div className="empty-state">{t('refreshing')}</div>:expiring.length===0?<div className="empty-state"><strong>{t('allClear')}</strong><span>{t('noAttention')}</span></div>:<div className="document-list">{expiring.map(document=><DocumentRow key={document.id} document={document} lang={lang}/>)}</div>}</article><article className="panel" id="documents"><div className="panel-heading"><div><p className="eyebrow">{t('activity')}</p><h2>{t('recent')}</h2></div><a href="#documents">{t('viewAll')}</a></div>{recent.length===0?<div className="empty-state"><strong>{t('noDocs')}</strong><span>{t('addFirst')}</span></div>:<div className="document-list">{recent.map(document=><DocumentRow key={document.id} document={document} lang={lang}/>)}</div>}</article></section><section className="insight-strip"><div><span className="insight-icon">✓</span><div><strong>{summary.active} {t('activeInsight')}</strong><span>{t('activeInsightText')}</span></div></div><div><span className="insight-icon">!</span><div><strong>{summary.expiringSoon+summary.expired} {t('attentionInsight')}</strong><span>{t('attentionInsightText')}</span></div></div><div><span className="insight-icon">∞</span><div><strong>{summary.noExpiry} {t('noExpiryInsight')}</strong><span>{t('noExpiryInsightText')}</span></div></div></section></div></main>;
 }
-
-function Feature({ kind, title, text }: { kind: 'calendar' | 'bell' | 'shield' | 'chart'; title: string; text: string }) {
-  return <div className="feature"><span className={`feature-icon ${kind}`}><FeatureIcon kind={kind} /></span><strong>{title}</strong><span>{text}</span></div>;
-}
-
-function DocumentRow({ document }: { document: DocumentItem }) {
-  return <div className="document-row"><div className="document-icon">{document.documentType.slice(0, 2).toUpperCase()}</div><div className="document-main"><strong>{document.title}</strong><span>{document.counterparty || document.documentNumber || document.documentType}</span></div><div className="document-meta"><span className={`status ${document.status.toLowerCase()}`}>{statusLabel(document.status)}</span><span>{formatDate(document.expiryDate)}</span></div></div>;
-}
+function DocumentRow({document,lang}:{document:DocumentItem;lang:Lang}){return <div className="document-row"><div className="document-icon">{document.documentType.slice(0,2).toUpperCase()}</div><div className="document-main"><strong>{document.title}</strong><span>{document.counterparty||document.documentNumber||document.documentType}</span></div><div className="document-meta"><span className={`status ${document.status.toLowerCase()}`}>{statusLabel(document.status,lang)}</span><span>{formatDate(document.expiryDate,lang)}</span></div></div>;}
