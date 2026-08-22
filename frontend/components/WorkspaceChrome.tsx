@@ -80,9 +80,10 @@ export default function WorkspaceChrome({ children }: Props) {
 
   useEffect(() => {
     const value = query.trim();
+    if (pathname !== '/documents' && !value) return;
     const timer = window.setTimeout(() => {
       if (pathname !== '/documents') {
-        router.push(`/documents${value ? `?search=${encodeURIComponent(value)}` : ''}`);
+        router.push(`/documents?search=${encodeURIComponent(value)}`);
       } else {
         const params = new URLSearchParams(window.location.search);
         if (value) params.set('search', value); else params.delete('search');
@@ -123,7 +124,8 @@ export default function WorkspaceChrome({ children }: Props) {
     event.preventDefault();
     const value = query.trim();
     if (pathname !== '/documents') {
-      router.push(`/documents${value ? `?search=${encodeURIComponent(value)}` : ''}`);
+      if (value) router.push(`/documents?search=${encodeURIComponent(value)}`);
+      else router.push('/documents');
     } else {
       const params = new URLSearchParams(window.location.search);
       if (value) params.set('search', value); else params.delete('search');
@@ -165,9 +167,9 @@ export default function WorkspaceChrome({ children }: Props) {
       <header className="chrome-topbar">
         <form onSubmit={search} className="chrome-search"><Icon name="search" /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t('search')} /><kbd>⌘ K</kbd></form>
         <div className="chrome-top-actions">
-          <button className="chrome-icon-button" aria-label={lang === 'id' ? 'Notifikasi' : 'Notifications'}>♧</button>
-          <button className="chrome-theme-button" onClick={() => setTheme(value => value === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☼' : '☾'} {theme === 'dark' ? t('dark') : t('light')}</button>
-          <button className="chrome-theme-button" onClick={() => setLang(lang === 'id' ? 'en' : 'id')} aria-label={t('language')}>{lang.toUpperCase()}</button>
+          <button type="button" className="chrome-icon-button" aria-label={lang === 'id' ? 'Notifikasi' : 'Notifications'}>♧</button>
+          <button type="button" className="chrome-theme-button" onClick={() => setTheme(value => value === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☼' : '☾'} {theme === 'dark' ? t('dark') : t('light')}</button>
+          <button type="button" className="chrome-theme-button" onClick={() => setLang(lang === 'id' ? 'en' : 'id')} aria-label={t('language')}>{lang.toUpperCase()}</button>
           <div className="chrome-profile"><div className="chrome-avatar small">{initials}</div><div><strong>Admin User</strong><span>{role}</span></div><span>⌄</span></div>
         </div>
       </header>
