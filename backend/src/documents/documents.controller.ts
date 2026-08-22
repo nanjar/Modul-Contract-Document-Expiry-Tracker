@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -7,13 +8,17 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../auth/roles.guard';
 import { RemindersService } from '../reminders/reminders.service';
+import { StorageService } from '../storage/storage.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { ListDocumentsQueryDto } from './dto/list-documents-query.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
@@ -27,6 +32,7 @@ export class DocumentsController {
   constructor(
     private readonly documents: DocumentsService,
     private readonly reminders: RemindersService,
+    private readonly storage: StorageService,
   ) {}
 
   @Get()
@@ -43,31 +49,82 @@ export class DocumentsController {
 
   @Post()
   @Roles(Role.SUPERUSER, Role.EDITOR)
-  async create(@Body() dto: CreateDocumentDto, @Req() req: any) {
-    const document = await this.documents.create({
-      ...dto,
-      createdById: req.user.sub,
-    });
-
-    await this.reminders.createDefaults(document.id);
-    return document;
+  create(@Body() dto: CreateDocumentDto, @Req() req: any) {
+    return this.documents.create({ ...dto, createdById: req.user.sub });
   }
 
   @Patch(':id')
   @Roles(Role.SUPERUSER, Role.EDITOR)
-  async update(
-    @Param('id') id: string,
-    @Body() dto: UpdateDocumentDto,
-    @Req() req: any,
-  ) {
-    const document = await this.documents.update(id, dto, req.user.sub);
-    await this.reminders.createDefaults(document.id);
-    return document;
+  update(@Param('id') id: string, @Body() dto: UpdateDocumentDto, @Req() req: any) {
+    return this.documents.update(id, dto, req.user.sub);
   }
 
   @Post(':id/archive')
   @Roles(Role.SUPERUSER, Role.EDITOR)
   archive(@Param('id') id: string, @Req() req: any) {
     return this.documents.archive(id, req.user.sub);
+  }
+
+  @Post(':id/file')
+  @Roles(Role.SUPERUSER, Role.EDITOR)
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+      },
+      required: ['file'],
+    },
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadFile(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: any,
+  ) {
+    if (!file) throw new BadRequestException('File is required');
+    if (!file.originalname || !file.mimetype || !file.buffer) {
+      throw new BadRequestException('Invalid uploaded file');
+    }
+
+    const document = await this.documents.findOne(id);
+    const extension = file.originalname.includes('.')
+      ? file.originalname.slice(file.originalname.lastIndexOf('.')).toLowerCase()
+      : '';
+    const key = `documents/${id}/${crypto.randomUUID()}${extension}`;
+
+    await this.storage.putObject({
+      key,
+      body: file.buffer,
+      contentType: file.mimetype,
+    });
+
+    await this.documents.attachFile(id, {
+      storageKey: key,
+      originalFilename: file.originalname,
+      mimeType: file.mimetype,
+      fileSize: file.size,
+    }, req.user.sub);
+
+    if (document.storageKey && document.storageKey !== key) {
+      await this.storage.deleteObject(document.storageKey);
+    }
+
+    return this.documents.findOne(id);
+  }
+
+  @Get(':id/file')
+  @Roles(Role.SUPERUSER, Role.EDITOR, Role.VIEWER)
+  async downloadFile(@Param('id') id: string) {
+    const document = await this.documents.findOne(id);
+    if (!document.storageKey) throw new BadRequestException('Document has no file');
+
+    return {
+      url: await this.storage.getDownloadUrl(document.storageKey),
+      expiresIn: 300,
+      filename: document.originalFilename,
+      mimeType: document.mimeType,
+    };
   }
 }
