@@ -98,14 +98,14 @@ export default function WorkspaceChrome({ children }: Props) {
   function navigate() { window.setTimeout(() => window.dispatchEvent(new CustomEvent('expiry-tracker-route-change')), 0); }
   function search(event: FormEvent) { event.preventDefault(); const value = query.trim(); if (pathname !== '/documents') { if (value) router.push(`/documents?search=${encodeURIComponent(value)}`); else router.push('/documents'); } else { const params = new URLSearchParams(window.location.search); if (value) params.set('search', value); else params.delete('search'); const nextQuery = params.toString(); router.push(`/documents${nextQuery ? `?${nextQuery}` : ''}`); } window.dispatchEvent(new CustomEvent('expiry-tracker-search', { detail: value })); window.setTimeout(() => window.dispatchEvent(new CustomEvent('expiry-tracker-route-change')), 0); }
   function logout() { sessionStorage.removeItem('expiry-tracker-token'); window.dispatchEvent(new Event('expiry-tracker-auth-change')); router.push('/'); }
-  function toggleProfile(source: ProfileMenuSource) { setProfileMenuSource(source); setProfileOpen(value => !value); }
+  function openProfile(source: ProfileMenuSource) { setProfileMenuSource(source); setProfileOpen(true); }
   const initials = role === 'SUPERUSER' ? 'AD' : role === 'EDITOR' ? 'ED' : 'VW';
   const active = (href: string) => href === '/documents?status=ARCHIVED' ? pathname === '/documents' && archiveActive : pathname === href;
   const profileMenuPosition = profileMenuSource === 'sidebar'
     ? { left: 16, bottom: 82, top: 'auto', right: 'auto' }
     : { right: 20, top: 72, left: 'auto', bottom: 'auto' };
 
-  const profileMenu = profileOpen ? <div className="chrome-profile-menu" data-profile-menu role="menu" style={{ position: 'fixed', ...profileMenuPosition, zIndex: 9999, minWidth: 280 }}>
+  const profileMenu = profileOpen ? <div className="chrome-profile-menu" data-profile-menu role="menu" onPointerDown={event => event.stopPropagation()} style={{ position: 'fixed', ...profileMenuPosition, zIndex: 9999, minWidth: 280 }}>
     <div className="chrome-profile-menu-head"><div className="chrome-avatar small">{initials}</div><div><strong>{userName}</strong><span>{role}</span></div></div>
     <div className="chrome-profile-menu-divider" />
     <Link href="/profile" onClick={() => setProfileOpen(false)} role="menuitem"><Icon name="profile" /><div><strong>{t('profile')}</strong><span>{lang === 'id' ? 'Nama, email & akun' : 'Name, email & account'}</span></div></Link>
@@ -119,7 +119,7 @@ export default function WorkspaceChrome({ children }: Props) {
       <nav className="chrome-nav">{nav.map(([key, href, icon]) => <Link key={href} href={href} onClick={navigate} className={`chrome-nav-item ${active(href) ? 'active' : ''}`}><Icon name={icon} /><span>{t(key)}</span></Link>)}</nav>
       {role === 'SUPERUSER' && <><div className="chrome-section-label admin">{lang === 'id' ? 'ADMINISTRASI' : 'ADMINISTRATION'}</div><nav className="chrome-nav"><Link href="/users" onClick={navigate} className={`chrome-nav-item ${active('/users') ? 'active' : ''}`}><Icon name="users" /><span>{t('users')}</span></Link><Link href="/settings" onClick={navigate} className={`chrome-nav-item ${active('/settings') ? 'active' : ''}`}><Icon name="settings" /><span>{t('settings')}</span></Link></nav></>}
       <div className="chrome-user">
-        <button type="button" className="chrome-profile chrome-sidebar-profile" data-profile-control onClick={() => toggleProfile('sidebar')} aria-haspopup="menu" aria-expanded={profileOpen}>
+        <button type="button" className="chrome-profile chrome-sidebar-profile" data-profile-control onPointerDown={event => event.stopPropagation()} onClick={event => { event.preventDefault(); event.stopPropagation(); openProfile('sidebar'); }} aria-haspopup="menu" aria-expanded={profileOpen && profileMenuSource === 'sidebar'}>
           <div className="chrome-avatar">{initials}</div><div className="chrome-user-meta"><strong>{userName}</strong><span>{role}</span></div><span>⌄</span>
         </button>
       </div>
@@ -128,7 +128,7 @@ export default function WorkspaceChrome({ children }: Props) {
       <form onSubmit={search} className="chrome-search"><Icon name="search" /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t('search')} /><kbd>⌘ K</kbd></form>
       <div className="chrome-top-actions"><button type="button" className="chrome-icon-button" aria-label={lang === 'id' ? 'Notifikasi' : 'Notifications'}>♧</button><button type="button" className="chrome-theme-button" onClick={() => setTheme(value => value === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☼' : '☾'} {theme === 'dark' ? t('dark') : t('light')}</button><button type="button" className="chrome-theme-button" onClick={() => setLang(lang === 'id' ? 'en' : 'id')} aria-label={t('language')}>{lang.toUpperCase()}</button>
         <div className="chrome-profile-wrap">
-          <button type="button" className={`chrome-profile ${profileOpen && profileMenuSource === 'topbar' ? 'open' : ''}`} data-profile-control onClick={() => toggleProfile('topbar')} aria-haspopup="menu" aria-expanded={profileOpen && profileMenuSource === 'topbar'}>
+          <button type="button" className={`chrome-profile ${profileOpen && profileMenuSource === 'topbar' ? 'open' : ''}`} data-profile-control onPointerDown={event => event.stopPropagation()} onClick={event => { event.preventDefault(); event.stopPropagation(); openProfile('topbar'); }} aria-haspopup="menu" aria-expanded={profileOpen && profileMenuSource === 'topbar'}>
             <div className="chrome-avatar small">{initials}</div><div><strong>{userName}</strong><span>{role}</span></div><span>⌄</span>
           </button>
         </div>
