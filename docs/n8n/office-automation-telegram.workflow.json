@@ -1,0 +1,284 @@
+{
+  "name": "Business Operations - Office Automation Telegram",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "business-operations/office-events",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "office-webhook",
+      "name": "Office Event Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "business-operations-office-events"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst event = String(body.event ?? '');\nconst eventId = String(body.event_id ?? body.eventId ?? '');\nconst payload = body.payload ?? {};\nconst secret = String($env.N8N_OFFICE_EVENT_SECRET ?? '');\nconst suppliedSecret = String(body.secret ?? '');\n\nif (!secret || suppliedSecret !== secret) {\n  throw new Error('Unauthorized office integration event');\n}\n\nif (!eventId) throw new Error('Missing event_id');\n\nreturn [{ json: { event, eventId, payload } }];"
+      },
+      "id": "validate-event",
+      "name": "Validate Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.event}}",
+                    "rightValue": "OFFICE_REQUEST_CREATED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "request-created"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.event}}",
+                    "rightValue": "OFFICE_APPROVAL_REQUIRED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "approval-required"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.event}}",
+                    "rightValue": "OFFICE_REQUEST_APPROVED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "request-approved"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.event}}",
+                    "rightValue": "OFFICE_REQUEST_REJECTED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "request-rejected"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.event}}",
+                    "rightValue": "OFFICE_TASK_OVERDUE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "task-overdue"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "route-event",
+      "name": "Route Office Event",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.payload.chat_id}}",
+        "text": "=📋 *Office Request*\n\nRequest: {{$json.payload.request_number}}\nType: {{$json.payload.request_type}}\nRequester: {{$json.payload.requester_name}}\nStatus: {{$json.payload.status}}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-request-created",
+      "name": "Telegram - Request Created",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [760, -240],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_TELEGRAM_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.payload.approver_chat_id}}",
+        "text": "=🔔 *Approval Required*\n\nRequest: {{$json.payload.request_number}}\nRequester: {{$json.payload.requester_name}}\nType: {{$json.payload.request_type}}\n\nSilakan buka aplikasi untuk melakukan approval.",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-approval-required",
+      "name": "Telegram - Approval Required",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [760, -80],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_TELEGRAM_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.payload.chat_id}}",
+        "text": "=✅ *Request Approved*\n\nRequest: {{$json.payload.request_number}}\nApproved by: {{$json.payload.approver_name}}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-request-approved",
+      "name": "Telegram - Request Approved",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [760, 80],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_TELEGRAM_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.payload.chat_id}}",
+        "text": "=❌ *Request Rejected*\n\nRequest: {{$json.payload.request_number}}\nRejected by: {{$json.payload.approver_name}}\nReason: {{$json.payload.comment}}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-request-rejected",
+      "name": "Telegram - Request Rejected",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [760, 240],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_TELEGRAM_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.payload.chat_id}}",
+        "text": "=⚠️ *Task Overdue*\n\nTask: {{$json.payload.task_title}}\nRequest: {{$json.payload.request_number}}\nDue: {{$json.payload.due_date}}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-task-overdue",
+      "name": "Telegram - Task Overdue",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [760, 400],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_TELEGRAM_CREDENTIAL_NAME"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Office Event Webhook": {
+      "main": [[{"node": "Validate Event", "type": "main", "index": 0}]]
+    },
+    "Validate Event": {
+      "main": [[{"node": "Route Office Event", "type": "main", "index": 0}]]
+    },
+    "Route Office Event": {
+      "main": [
+        [{"node": "Telegram - Request Created", "type": "main", "index": 0}],
+        [{"node": "Telegram - Approval Required", "type": "main", "index": 0}],
+        [{"node": "Telegram - Request Approved", "type": "main", "index": 0}],
+        [{"node": "Telegram - Request Rejected", "type": "main", "index": 0}],
+        [{"node": "Telegram - Task Overdue", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
