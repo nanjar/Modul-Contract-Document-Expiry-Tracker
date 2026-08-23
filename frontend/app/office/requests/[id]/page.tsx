@@ -1,0 +1,26 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { useLanguage } from '../../../../components/LanguageProvider';
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+const token = () => (typeof window === 'undefined' ? '' : window.sessionStorage.getItem('expiry-tracker-token') ?? '');
+
+type RequestDetail = { id:string; requestNumber:string; title:string; type:string; description?:string|null; priority:string; status:string; requiredDate?:string|null; requester?:{name:string;email:string}; tasks:Array<{id:string;title:string;status:string;priority:string;dueDate?:string|null;assignee?:{name:string}|null}>; approvals:Array<{id:string;status:string;comment?:string|null;approver?:{name:string}}>; activities:Array<{id:string;action:string;createdAt:string}> };
+
+export default function OfficeRequestDetailPage() {
+  const { lang } = useLanguage(); const id = lang === 'id'; const params = useParams<{id:string}>();
+  const [request,setRequest]=useState<RequestDetail|null>(null); const [error,setError]=useState(''); const [loading,setLoading]=useState(true); const [canceling,setCanceling]=useState(false);
+  useEffect(()=>{(async()=>{try{const r=await fetch(`${API}/office-automation/requests/${params.id}`,{headers:{Authorization:`Bearer ${token()}`},cache:'no-store'});if(!r.ok)throw new Error(id?'Request tidak ditemukan.':'Request not found.');setRequest(await r.json())}catch(e){setError(e instanceof Error?e.message:'Unable to load request.')}finally{setLoading(false)}})()},[params.id,id]);
+  const cancel=async()=>{if(!request||canceling)return;setCanceling(true);try{const r=await fetch(`${API}/office-automation/requests/${request.id}/cancel`,{method:'POST',headers:{Authorization:`Bearer ${token()}`}});if(!r.ok)throw new Error(id?'Gagal membatalkan request.':'Unable to cancel request.');setRequest(await (await fetch(`${API}/office-automation/requests/${request.id}`,{headers:{Authorization:`Bearer ${token()}`}})).json())}catch(e){setError(e instanceof Error?e.message:'Unable to cancel request.')}finally{setCanceling(false)}};
+  return <main style={{minHeight:'100vh',background:'#f7f9fc',padding:'48px clamp(20px,5vw,72px)',fontFamily:'Inter,system-ui,sans-serif',color:'#0f172a'}}><div style={{maxWidth:1100,margin:'auto'}}><Link href="/office" style={{color:'#64748b',textDecoration:'none',fontSize:13}}>← {id?'Operasional Kantor':'Office Operations'}</Link>{loading?<div style={card}>Loading…</div>:error?<div style={{...card,color:'#b91c1c'}}>{error}</div>:request&&<><header style={{...card,marginTop:20}}><div style={{fontSize:11,letterSpacing:'.14em',fontWeight:800,color:'#64748b'}}>OFFICE REQUEST</div><h1 style={{fontSize:34,margin:'8px 0'}}>{request.title}</h1><div style={{color:'#64748b'}}>{request.requestNumber} · {request.type} · {request.priority}</div><div style={{marginTop:16,display:'flex',gap:8,alignItems:'center'}}><span style={pill}>{request.status}</span>{['PENDING','APPROVED'].includes(request.status)&&<button onClick={cancel} disabled={canceling} style={danger}>{canceling?'…':id?'Batalkan':'Cancel'}</button>}</div></header><div style={grid}><section style={card}><h2 style={h2}>{id?'Detail':'Details'}</h2><p>{request.description||'—'}</p><p><strong>{id?'Tanggal dibutuhkan':'Required date'}:</strong> {request.requiredDate?new Date(request.requiredDate).toLocaleString(id?'id-ID':'en-US'):'—'}</p><p><strong>{id?'Pemohon':'Requester'}:</strong> {request.requester?.name} ({request.requester?.email})</p></section><section style={card}><h2 style={h2}>{id?'Approval':'Approvals'}</h2>{request.approvals.length?request.approvals.map(a=><div key={a.id} style={item}><strong>{a.approver?.name||'Approver'}</strong><span style={pill}>{a.status}</span>{a.comment&&<small>{a.comment}</small>}</div>):<p style={{color:'#64748b'}}>{id?'Belum ada approval.':'No approval assigned.'}</p>}</section><section style={card}><h2 style={h2}>{id?'Task':'Tasks'}</h2>{request.tasks.length?request.tasks.map(t=><div key={t.id} style={item}><strong>{t.title}</strong><span style={pill}>{t.status}</span><small>{t.assignee?.name||'Unassigned'} · {t.dueDate?new Date(t.dueDate).toLocaleDateString(id?'id-ID':'en-US'):'—'}</small></div>):<p style={{color:'#64748b'}}>{id?'Belum ada task.':'No tasks assigned.'}</p>}</section><section style={card}><h2 style={h2}>{id?'Aktivitas':'Activity'}</h2>{request.activities.map(a=><div key={a.id} style={item}><strong>{a.action}</strong><small>{new Date(a.createdAt).toLocaleString(id?'id-ID':'en-US')}</small></div>)}</section></div></>}</div></main>;
+}
+
+const card:React.CSSProperties={background:'#fff',border:'1px solid #e2e8f0',borderRadius:18,padding:24,marginTop:20};
+const grid:React.CSSProperties={display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:16};
+const h2:React.CSSProperties={fontSize:16,marginTop:0};
+const item:React.CSSProperties={display:'grid',gridTemplateColumns:'1fr auto',gap:6,padding:'12px 0',borderBottom:'1px solid #eef2f7'};
+const pill:React.CSSProperties={display:'inline-flex',padding:'5px 8px',borderRadius:999,background:'#eff6ff',color:'#1d4ed8',fontSize:11,fontWeight:750};
+const danger:React.CSSProperties={border:'1px solid #fecaca',background:'#fff',color:'#b91c1c',borderRadius:9,padding:'7px 10px',cursor:'pointer'};
