@@ -13,6 +13,7 @@ import { UsersModule } from './users/users.module';
 import { SettingsModule } from './settings/settings.module';
 import { ProfileModule } from './profile/profile.module';
 import { OfficeAutomationModule } from './office-automation/office-automation.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -30,6 +31,7 @@ import { HealthController } from './health.controller';
     SettingsModule,
     ProfileModule,
     OfficeAutomationModule,
+    IntegrationsModule,
   ],
   controllers: [HealthController],
 })
