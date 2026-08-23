@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { N8nService } from './n8n.service';
 
+type EventPayload = Record<string, unknown>;
+
 @Injectable()
 export class IntegrationEventService {
   private readonly logger = new Logger(IntegrationEventService.name);
@@ -43,10 +45,12 @@ export class IntegrationEventService {
         if (claimed.count !== 1) continue;
 
         try {
+          const payload = await this.enrichPayload(event.payload);
+
           await this.n8n.dispatch({
             event: event.event,
             entityId: event.entityId,
-            payload: event.payload,
+            payload,
             idempotencyKey: event.idempotencyKey,
           });
 
@@ -105,5 +109,43 @@ export class IntegrationEventService {
     } finally {
       this.processing = false;
     }
+  }
+
+  private async enrichPayload(raw: unknown): Promise<unknown> {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+
+    const payload = raw as EventPayload;
+    const candidateIds = [
+      payload.userId,
+      payload.requesterId,
+      payload.assigneeId,
+      payload.approverId,
+      payload.actorId,
+    ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+    const userIds = [...new Set(candidateIds)];
+    if (userIds.length === 0) return payload;
+
+    const identities = await this.prisma.userTelegramIdentity.findMany({
+      where: { userId: { in: userIds } },
+      select: {
+        userId: true,
+        chatId: true,
+        username: true,
+        isVerified: true,
+      },
+    });
+
+    const telegramRecipients = identities.map((identity) => ({
+      userId: identity.userId,
+      chatId: identity.chatId,
+      username: identity.username,
+      isVerified: identity.isVerified,
+    }));
+
+    return {
+      ...payload,
+      telegramRecipients,
+    };
   }
 }
