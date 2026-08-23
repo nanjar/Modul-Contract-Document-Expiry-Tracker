@@ -1,26 +1,57 @@
 'use client';
 
 import { FormEvent, useEffect, useState, type CSSProperties } from 'react';
+import { useRouter } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+type Role = 'SUPERUSER' | 'EDITOR' | 'VIEWER';
 type Settings = { warningThresholdDays: number; defaultReminderDays: number[]; notificationEmailMode: string };
 
+function getRole(): Role | null {
+  try {
+    const token = window.sessionStorage.getItem('expiry-tracker-token');
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return (payload.role ?? null) as Role | null;
+  } catch {
+    return null;
+  }
+}
+
 export default function SettingsPage() {
+  const router = useRouter();
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [threshold, setThreshold] = useState('30');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    const role = getRole();
+    if (role !== 'SUPERUSER') {
+      router.replace('/');
+      return;
+    }
+    setAuthorized(true);
+  }, [router]);
+
   async function load() {
     const token = window.sessionStorage.getItem('expiry-tracker-token');
     if (!token) return;
     const response = await fetch(`${API_URL}/settings`, { headers: { Authorization: `Bearer ${token}` } });
-    if (response.status === 401 || response.status === 403) { setError('You do not have permission to manage system settings.'); return; }
+    if (response.status === 401 || response.status === 403) {
+      router.replace('/');
+      return;
+    }
     if (!response.ok) throw new Error('Unable to load settings.');
     const data = await response.json(); setSettings(data); setThreshold(String(data.warningThresholdDays));
   }
-  useEffect(() => { load().catch((e) => setError(e instanceof Error ? e.message : 'Unable to load settings.')); }, []);
+
+  useEffect(() => {
+    if (authorized !== true) return;
+    load().catch((e) => setError(e instanceof Error ? e.message : 'Unable to load settings.'));
+  }, [authorized]);
 
   async function save(e: FormEvent) {
     e.preventDefault(); setSaving(true); setMessage(''); setError('');
@@ -28,11 +59,14 @@ export default function SettingsPage() {
       const token = window.sessionStorage.getItem('expiry-tracker-token');
       const response = await fetch(`${API_URL}/settings`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` }, body: JSON.stringify({ warningThresholdDays: Number(threshold) }) });
       const data = await response.json();
+      if (response.status === 401 || response.status === 403) { router.replace('/'); return; }
       if (!response.ok) throw new Error(Array.isArray(data.message) ? data.message.join(', ') : data.message ?? 'Unable to save settings.');
       setSettings(data); setThreshold(String(data.warningThresholdDays)); setMessage('Settings saved successfully.');
     } catch (e) { setError(e instanceof Error ? e.message : 'Unable to save settings.'); }
     finally { setSaving(false); }
   }
+
+  if (authorized !== true) return null;
 
   const card: CSSProperties = { background: '#fff', border: '1px solid #e8ecf2', borderRadius: 18, padding: 24, marginBottom: 16, boxShadow: '0 12px 30px rgba(25,40,70,.05)' };
   return <main style={{ minHeight: '100vh', background: '#f6f8fc', padding: '32px' }}><div style={{ maxWidth: 1000, margin: '0 auto' }}>
