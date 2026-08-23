@@ -1,160 +1,546 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
 
-type Role = 'SUPERUSER' | 'EDITOR' | 'VIEWER';
-type AuditLog = {
-  id: string;
-  action: string;
-  entity: string;
-  entityId?: string | null;
-  actorUserId?: string | null;
-  metadata?: Record<string, unknown> | null;
-  createdAt: string;
-  actor?: { id?: string; name?: string; email?: string; role?: Role } | null;
-};
+const API =
+  process.env.NEXT_PUBLIC_API_URL ??
+  'http://localhost:3001/api/v1';
 
-type AuditResponse = {
-  items: AuditLog[];
-  pagination?: { page: number; limit: number; total: number; totalPages: number };
-};
+function getHeaders(): Headers {
+  const headers = new Headers();
+  headers.set('Content-Type', 'application/json');
 
-type Session = { token: string; role: Role };
+  if (typeof window !== 'undefined') {
+    const token = sessionStorage.getItem(
+      'expiry-tracker-token',
+    );
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
-
-function getSession(): Session | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const token = sessionStorage.getItem('expiry-tracker-token');
-    if (!token) return null;
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return { token, role: payload.role as Role };
-  } catch {
-    return null;
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
   }
+
+  return headers;
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('id-ID', {
-    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  }).format(new Date(value));
-}
+type DocumentForm = {
+  title: string;
+  documentNumber: string;
+  documentType: string;
+  counterparty: string;
+  description: string;
+  issueDate: string;
+  effectiveDate: string;
+  expiryDate: string;
+  reminderEnabled: boolean;
+};
 
-export default function AuditPage() {
-  const [session, setSession] = useState<Session | null>(() => getSession());
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(true);
+const labelStyle = {
+  display: 'grid',
+  gap: 7,
+  fontSize: 12,
+  fontWeight: 800,
+  color: '#526078',
+} as const;
+
+const inputStyle = {
+  width: '100%',
+  boxSizing: 'border-box' as const,
+  padding: '12px 13px',
+  border: '1px solid #dfe5ee',
+  borderRadius: 10,
+  background: '#fff',
+  color: '#17213a',
+} as const;
+
+const DOCUMENT_TYPES = [
+  'CONTRACT',
+  'LICENSE',
+  'CERTIFICATE',
+  'INSURANCE',
+  'PERMIT',
+  'OTHER',
+];
+
+export default function EditDocumentPage() {
+  const params = useParams<{ id: string }>();
+  const id = params.id;
+
+  const router = useRouter();
+
+  const [form, setForm] = useState<DocumentForm | null>(null);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [action, setAction] = useState('');
-  const [entity, setEntity] = useState('');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [selected, setSelected] = useState<AuditLog | null>(null);
 
   useEffect(() => {
-    const syncSession = () => setSession(getSession());
-    window.addEventListener('storage', syncSession);
-    window.addEventListener('expiry-tracker-auth-change', syncSession);
-    return () => {
-      window.removeEventListener('storage', syncSession);
-      window.removeEventListener('expiry-tracker-auth-change', syncSession);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!session) {
-      setLoading(false);
-      setError('Sesi Anda tidak tersedia atau sudah berakhir. Silakan masuk kembali.');
+    if (!id) {
       return;
     }
 
-    if (session.role !== 'SUPERUSER') {
-      setLoading(false);
-      setError('Akses superuser diperlukan.');
-      return;
-    }
-
-    const currentSession = session;
-    const controller = new AbortController();
-    let timedOut = false;
-    let active = true;
-    const timeout = window.setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, 10000);
-
-    async function load() {
-      if (active) {
-        setLoading(true);
-        setError('');
-      }
+    async function loadDocument() {
       try {
-        const qs = new URLSearchParams({ page: String(page), limit: '20' });
-        if (action.trim()) qs.set('action', action.trim());
-        if (entity.trim()) qs.set('entity', entity.trim());
+        const response = await fetch(
+          `${API}/documents/${id}`,
+          {
+            headers: getHeaders(),
+          },
+        );
 
-        const response = await fetch(`${API_URL}/audit-logs?${qs.toString()}`, {
-          headers: { Authorization: `Bearer ${currentSession.token}` },
-          signal: controller.signal,
-          cache: 'no-store',
-        });
+        const data = await response.json();
 
         if (!response.ok) {
-          if (response.status === 401) throw new Error('Sesi Anda telah berakhir. Silakan masuk kembali.');
-          if (response.status === 403) throw new Error('Akses superuser diperlukan.');
-          throw new Error(`Gagal memuat log audit (HTTP ${response.status}).`);
+          throw new Error(
+            Array.isArray(data.message)
+              ? data.message.join(', ')
+              : data.message ??
+                  'Unable to load document',
+          );
         }
 
-        const data = (await response.json()) as AuditResponse | AuditLog[];
-        if (!active) return;
-        if (Array.isArray(data)) {
-          setLogs(data);
-          setTotal(data.length);
-          setTotalPages(data.length >= 20 ? page + 1 : page);
-        } else {
-          setLogs(data.items ?? []);
-          setTotal(data.pagination?.total ?? data.items?.length ?? 0);
-          setTotalPages(data.pagination?.totalPages ?? 1);
-        }
+        setForm({
+          title: data.title ?? '',
+          documentNumber:
+            data.documentNumber ?? '',
+          documentType:
+            data.documentType ?? 'OTHER',
+          counterparty:
+            data.counterparty ?? '',
+          description:
+            data.description ?? '',
+          issueDate:
+            data.issueDate?.slice(0, 10) ?? '',
+          effectiveDate:
+            data.effectiveDate?.slice(0, 10) ?? '',
+          expiryDate:
+            data.expiryDate?.slice(0, 10) ?? '',
+          reminderEnabled:
+            data.reminderEnabled ?? true,
+        });
       } catch (err) {
-        if (!active) return;
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          if (timedOut) setError('Permintaan log audit terlalu lama. Periksa backend dan database.');
-        } else if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError('Gagal memuat log audit.');
-        }
-      } finally {
-        if (active) setLoading(false);
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Unable to load document',
+        );
       }
     }
 
-    void load();
-    return () => {
-      active = false;
-      window.clearTimeout(timeout);
-      controller.abort();
-    };
-  }, [session, page, action, entity]);
+    void loadDocument();
+  }, [id]);
 
-  if (!session) return <main className="workspace"><div className="workspace-head"><p className="eyebrow">KEAMANAN</p><h1>Log audit</h1><p>Sesi Anda tidak tersedia atau sudah berakhir.</p><Link href="/" className="primary-button compact">Kembali ke login</Link></div></main>;
+  function updateForm(
+    changes: Partial<DocumentForm>,
+  ) {
+    setForm((current) =>
+      current
+        ? {
+            ...current,
+            ...changes,
+          }
+        : current,
+    );
+  }
 
-  return <main className="workspace">
-    <div className="workspace-head" style={{ marginBottom: 26 }}><div><p className="eyebrow">KEAMANAN</p><h1>Log audit</h1><p>Tinjau aktivitas administratif dan dokumen yang dicatat oleh sistem.</p></div></div>
-    <div className="toolbar" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-      <input value={action} onChange={(event) => { setPage(1); setAction(event.target.value); }} placeholder="Filter aksi…" className="search" style={{ flex: '1 1 260px', minWidth: 220 }} />
-      <input value={entity} onChange={(event) => { setPage(1); setEntity(event.target.value); }} placeholder="Filter entitas…" className="search" style={{ flex: '1 1 220px', minWidth: 180 }} />
-    </div>
-    {error && <div className="inline-error" style={{ marginBottom: 16 }}>{error}</div>}
-    <div className="table-card">
-      <div className="table-meta"><strong>{total} event audit</strong><span>{loading ? 'Memuat…' : `Halaman ${page} dari ${totalPages}`}</span></div>
-      {loading ? <div className="empty-state"><strong>Memuat aktivitas audit…</strong><p>Mengambil aktivitas keamanan terbaru.</p></div> : logs.length === 0 ? <div className="empty-state"><strong>Tidak ada event audit</strong><p>Tidak ada event yang cocok dengan filter saat ini.</p></div> : <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr>{['Waktu', 'Aksi', 'Entitas', 'Pelaku', ''].map((heading, index) => <th key={`${heading}-${index}`} style={{ textAlign: 'left', padding: '15px 20px' }}>{heading}</th>)}</tr></thead><tbody>{logs.map((log) => <tr key={log.id}><td style={{ padding: '16px 20px', fontSize: 12 }}>{formatDate(log.createdAt)}</td><td style={{ padding: '16px 20px', fontWeight: 800 }}>{log.action}</td><td style={{ padding: '16px 20px' }}><div style={{ fontWeight: 700 }}>{log.entity}</div><div style={{ fontSize: 11, color: 'var(--chrome-muted)', marginTop: 4 }}>{log.entityId ?? '—'}</div></td><td style={{ padding: '16px 20px', fontSize: 12 }}>{log.actor?.name ?? log.actor?.email ?? log.actorUserId ?? 'System'}</td><td style={{ padding: '16px 20px' }}><button onClick={() => setSelected(log)} style={{ border: 0, background: 'transparent', color: 'var(--chrome-accent)', fontWeight: 800 }}>Detail</button></td></tr>)}</tbody></table></div>}
-    </div>
-    <div className="pagination" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginTop: 16 }}><button disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)}>Sebelumnya</button><span>Halaman {page} / {totalPages}</span><button disabled={page >= totalPages || loading} onClick={() => setPage((value) => value + 1)}>Berikutnya</button></div>
-    {selected && <div onClick={() => setSelected(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,15,.68)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 50 }}><div onClick={(event) => event.stopPropagation()} style={{ width: '100%', maxWidth: 680, background: 'var(--chrome-surface)', color: 'var(--chrome-text)', border: '1px solid var(--chrome-border)', borderRadius: 20, padding: 28, boxShadow: '0 30px 90px rgba(0,0,0,.35)' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}><div><p className="eyebrow" style={{ margin: 0 }}>EVENT AUDIT</p><h2 style={{ margin: '7px 0 4px' }}>{selected.action}</h2><p style={{ margin: 0, color: 'var(--chrome-muted)', fontSize: 12 }}>{formatDate(selected.createdAt)}</p></div><button onClick={() => setSelected(null)} style={{ border: 0, background: 'transparent', color: 'var(--chrome-muted)', fontSize: 24 }}>×</button></div><pre style={{ marginTop: 22, background: 'var(--chrome-surface-2)', border: '1px solid var(--chrome-border)', borderRadius: 12, padding: 16, overflow: 'auto', fontSize: 12, color: 'var(--chrome-text)' }}>{JSON.stringify(selected, null, 2)}</pre></div></div>}
-  </main>;
+  async function save(event: FormEvent) {
+    event.preventDefault();
+
+    if (!form || !id) {
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    try {
+      const response = await fetch(
+        `${API}/documents/${id}`,
+        {
+          method: 'PATCH',
+          headers: getHeaders(),
+          body: JSON.stringify({
+            ...form,
+            documentNumber:
+              form.documentNumber || null,
+            counterparty:
+              form.counterparty || null,
+            description:
+              form.description || null,
+            issueDate:
+              form.issueDate || null,
+            effectiveDate:
+              form.effectiveDate || null,
+            expiryDate:
+              form.expiryDate || null,
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          Array.isArray(data.message)
+            ? data.message.join(', ')
+            : data.message ??
+                'Unable to save document',
+        );
+      }
+
+      router.push(`/documents/${id}`);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to save document',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!form) {
+    return (
+      <main
+        style={{
+          padding: 40,
+          fontFamily: 'Inter, system-ui',
+        }}
+      >
+        {error ? (
+          <div style={{ color: '#b91c1c' }}>
+            {error}
+          </div>
+        ) : (
+          'Loading document…'
+        )}
+      </main>
+    );
+  }
+
+  return (
+    <main
+      style={{
+        minHeight: '100vh',
+        background: '#f6f8fc',
+        padding: '32px',
+        fontFamily: 'Inter, system-ui',
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 900,
+          margin: '0 auto',
+        }}
+      >
+        <Link
+          href={`/documents/${id}`}
+          style={{
+            fontSize: 12,
+            color: '#64748b',
+          }}
+        >
+          ← Document detail
+        </Link>
+
+        <div
+          style={{
+            margin: '20px 0 25px',
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              letterSpacing: '.12em',
+              fontWeight: 800,
+              color: '#70809b',
+            }}
+          >
+            DOCUMENT WORKSPACE
+          </div>
+
+          <h1
+            style={{
+              margin: '7px 0',
+              fontSize: 34,
+              color: '#17213a',
+            }}
+          >
+            Edit document
+          </h1>
+
+          <p
+            style={{
+              margin: 0,
+              color: '#718096',
+            }}
+          >
+            Update metadata and expiry protection
+            without changing the document record
+            identity.
+          </p>
+        </div>
+
+        {error && (
+          <div
+            style={{
+              padding: 13,
+              borderRadius: 10,
+              background: '#fff0f0',
+              color: '#b42318',
+              marginBottom: 15,
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        <form
+          onSubmit={save}
+          style={{
+            background: '#fff',
+            border: '1px solid #e8ecf2',
+            borderRadius: 20,
+            padding: 28,
+          }}
+        >
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '2fr 1fr',
+              gap: 15,
+            }}
+          >
+            <Field
+              text="Title"
+              value={form.title}
+              onChange={(value) =>
+                updateForm({ title: value })
+              }
+              required
+            />
+
+            <Field
+              text="Document number"
+              value={form.documentNumber}
+              onChange={(value) =>
+                updateForm({
+                  documentNumber: value,
+                })
+              }
+            />
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 15,
+              marginTop: 15,
+            }}
+          >
+            <label style={labelStyle}>
+              Document type
+
+              <select
+                value={form.documentType}
+                onChange={(event) =>
+                  updateForm({
+                    documentType:
+                      event.target.value,
+                  })
+                }
+                style={inputStyle}
+              >
+                {DOCUMENT_TYPES.map((type) => (
+                  <option
+                    key={type}
+                    value={type}
+                  >
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <Field
+              text="Counterparty"
+              value={form.counterparty}
+              onChange={(value) =>
+                updateForm({
+                  counterparty: value,
+                })
+              }
+            />
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns:
+                '1fr 1fr 1fr',
+              gap: 15,
+              marginTop: 15,
+            }}
+          >
+            <Field
+              text="Issue date"
+              type="date"
+              value={form.issueDate}
+              onChange={(value) =>
+                updateForm({
+                  issueDate: value,
+                })
+              }
+            />
+
+            <Field
+              text="Effective date"
+              type="date"
+              value={form.effectiveDate}
+              onChange={(value) =>
+                updateForm({
+                  effectiveDate: value,
+                })
+              }
+            />
+
+            <Field
+              text="Expiry date"
+              type="date"
+              value={form.expiryDate}
+              onChange={(value) =>
+                updateForm({
+                  expiryDate: value,
+                })
+              }
+            />
+          </div>
+
+          <label
+            style={{
+              ...labelStyle,
+              marginTop: 15,
+            }}
+          >
+            Description
+
+            <textarea
+              rows={5}
+              value={form.description}
+              onChange={(event) =>
+                updateForm({
+                  description:
+                    event.target.value,
+                })
+              }
+              style={{
+                ...inputStyle,
+                height: 'auto',
+                padding: '11px 12px',
+              }}
+            />
+          </label>
+
+          <label
+            style={{
+              display: 'flex',
+              gap: 10,
+              alignItems: 'center',
+              marginTop: 17,
+              fontSize: 13,
+              fontWeight: 700,
+              color: '#526078',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={form.reminderEnabled}
+              onChange={(event) =>
+                updateForm({
+                  reminderEnabled:
+                    event.target.checked,
+                })
+              }
+            />
+
+            Enable expiry reminders
+          </label>
+
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: 9,
+              marginTop: 25,
+            }}
+          >
+            <Link
+              href={`/documents/${id}`}
+              style={{
+                padding: '11px 16px',
+                border:
+                  '1px solid #dfe5ee',
+                borderRadius: 10,
+                color: '#526078',
+                fontWeight: 800,
+              }}
+            >
+              Cancel
+            </Link>
+
+            <button
+              type="submit"
+              disabled={saving}
+              style={{
+                padding: '11px 18px',
+                border: 0,
+                borderRadius: 10,
+                background: '#273657',
+                color: '#fff',
+                fontWeight: 800,
+              }}
+            >
+              {saving
+                ? 'Saving…'
+                : 'Save changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </main>
+  );
+}
+
+type FieldProps = {
+  text: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  required?: boolean;
+};
+
+function Field({
+  text,
+  value,
+  onChange,
+  type = 'text',
+  required = false,
+}: FieldProps) {
+  return (
+    <label style={labelStyle}>
+      {text}
+
+      <input
+        required={required}
+        type={type}
+        value={value}
+        onChange={(event) =>
+          onChange(event.target.value)
+        }
+        style={inputStyle}
+      />
+    </label>
+  );
 }
