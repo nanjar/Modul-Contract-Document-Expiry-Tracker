@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 
 type Role = 'SUPERUSER' | 'EDITOR' | 'VIEWER';
 type Source = 'topbar' | 'sidebar';
-
 type User = { name: string; email?: string; role: Role };
 
 function readUser(): User {
@@ -20,9 +19,66 @@ function readUser(): User {
   }
 }
 
+const menuCopyStyle = {
+  minWidth: 0,
+  width: '100%',
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr)',
+  gridTemplateRows: 'auto auto',
+  alignContent: 'center',
+  justifyItems: 'start',
+  gap: 3,
+  overflow: 'hidden',
+};
+
+const menuTitleStyle = {
+  display: 'block',
+  margin: 0,
+  padding: 0,
+  fontSize: 14,
+  fontWeight: 750,
+  lineHeight: 1.25,
+  whiteSpace: 'nowrap' as const,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  maxWidth: '100%',
+};
+
+const menuDescriptionStyle = {
+  display: 'block',
+  margin: 0,
+  padding: 0,
+  fontSize: 11,
+  fontWeight: 500,
+  lineHeight: 1.3,
+  color: 'var(--muted, #8994a7)',
+  whiteSpace: 'nowrap' as const,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  maxWidth: '100%',
+};
+
+const itemStyle = {
+  width: '100%',
+  minHeight: 58,
+  display: 'grid',
+  gridTemplateColumns: '22px minmax(0, 1fr)',
+  alignItems: 'center',
+  columnGap: 12,
+  padding: '10px',
+  boxSizing: 'border-box' as const,
+  border: 0,
+  borderRadius: 10,
+  background: 'transparent',
+  color: 'inherit',
+  textDecoration: 'none',
+  textAlign: 'left' as const,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+};
+
 export default function DashboardProfileBridge() {
   const pathname = usePathname();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState<Source>('topbar');
   const [user, setUser] = useState<User>({ name: 'User', role: 'VIEWER' });
@@ -72,6 +128,16 @@ export default function DashboardProfileBridge() {
     window.location.href = '/';
   }
 
+  const renderMenuItem = (href: string, icon: string, title: string, description: string) => (
+    <Link href={href} role="menuitem" onClick={() => setOpen(false)} style={itemStyle}>
+      <span style={{ width: 22, height: 22, display: 'grid', placeItems: 'center', flex: '0 0 22px', fontSize: 18, lineHeight: 1 }}>{icon}</span>
+      <span style={menuCopyStyle}>
+        <strong style={menuTitleStyle}>{title}</strong>
+        <small style={menuDescriptionStyle}>{description}</small>
+      </span>
+    </Link>
+  );
+
   return <div
     data-dashboard-profile-menu
     role="menu"
@@ -79,48 +145,36 @@ export default function DashboardProfileBridge() {
       position: 'fixed',
       ...position,
       zIndex: 10000,
-      width: 280,
-      padding: 8,
+      width: 320,
+      maxWidth: 'calc(100vw - 24px)',
+      minWidth: 280,
+      padding: 12,
+      boxSizing: 'border-box',
       border: '1px solid var(--border, #25303d)',
       borderRadius: 16,
       background: 'var(--surface, #111822)',
       boxShadow: '0 22px 55px rgba(0,0,0,.28)',
       color: 'var(--text, #142038)',
+      overflow: 'hidden',
     }}
     onClick={event => event.stopPropagation()}
   >
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10 }}>
       <div className="avatar" style={{ width: 34, height: 34 }}>{initials}</div>
-      <div style={{ display: 'grid', gap: 3, minWidth: 0 }}>
-        <strong style={{ fontSize: 12 }}>{user.name}</strong>
-        <span style={{ fontSize: 10, opacity: .65 }}>{user.role}</span>
+      <div style={{ display: 'grid', gap: 3, minWidth: 0, flex: '1 1 auto' }}>
+        <strong style={{ fontSize: 12, lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</strong>
+        <span style={{ fontSize: 10, lineHeight: 1.25, opacity: .65 }}>{user.role}</span>
       </div>
     </div>
     <div style={{ height: 1, background: 'var(--border, #25303d)', margin: '6px 2px' }} />
-    <Link href="/profile" role="menuitem" onClick={() => setOpen(false)} style={itemStyle}>
-      <span>◯</span><div><strong>Profile</strong><small>Name, email & account</small></div>
-    </Link>
-    <Link href="/profile#security" role="menuitem" onClick={() => setOpen(false)} style={itemStyle}>
-      <span>⌑</span><div><strong>Security</strong><small>Change password</small></div>
-    </Link>
+    {renderMenuItem('/profile', '◯', 'Profile', 'Name, email & account')}
+    {renderMenuItem('/profile#security', '⌑', 'Security', 'Change password')}
     <button type="button" role="menuitem" onClick={signOut} style={itemStyle}>
-      <span style={{ color: '#d55' }}>↗</span><div><strong>Sign out</strong><small>End this session</small></div>
+      <span style={{ width: 22, height: 22, display: 'grid', placeItems: 'center', flex: '0 0 22px', color: '#d55', fontSize: 18, lineHeight: 1 }}>↗</span>
+      <span style={menuCopyStyle}>
+        <strong style={menuTitleStyle}>Sign out</strong>
+        <small style={menuDescriptionStyle}>End this session</small>
+      </span>
     </button>
   </div>;
 }
-
-const itemStyle = {
-  width: '100%',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  padding: '11px 10px',
-  border: 0,
-  borderRadius: 10,
-  background: 'transparent',
-  color: 'inherit',
-  textDecoration: 'none',
-  textAlign: 'left' as const,
-  cursor: 'pointer',
-  fontFamily: 'inherit',
-};
