@@ -7,6 +7,7 @@ import { useLanguage } from './LanguageProvider';
 
 type Role = 'SUPERUSER' | 'EDITOR' | 'VIEWER';
 type Props = { children: ReactNode };
+type SessionUser = { name: string; role: Role };
 
 const nav = [
   ['overview', '/', 'home'],
@@ -30,14 +31,14 @@ const copy = {
 } as const;
 type Key = keyof typeof copy.en;
 
-function roleFromToken(): Role {
+function sessionUserFromToken(): SessionUser {
   try {
     const token = typeof window !== 'undefined' ? sessionStorage.getItem('expiry-tracker-token') : null;
-    if (!token) return 'VIEWER';
+    if (!token) return { name: 'User', role: 'VIEWER' };
     const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return (payload.role ?? 'VIEWER') as Role;
+    return { name: payload.name ?? payload.email ?? 'User', role: (payload.role ?? 'VIEWER') as Role };
   } catch {
-    return 'VIEWER';
+    return { name: 'User', role: 'VIEWER' };
   }
 }
 
@@ -63,6 +64,7 @@ export default function WorkspaceChrome({ children }: Props) {
   const { lang, setLang } = useLanguage();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [role, setRole] = useState<Role>('VIEWER');
+  const [userName, setUserName] = useState('User');
   const [query, setQuery] = useState('');
   const [archiveActive, setArchiveActive] = useState(false);
   const t = (key: Key) => copy[lang][key];
@@ -70,7 +72,16 @@ export default function WorkspaceChrome({ children }: Props) {
   useEffect(() => {
     const saved = localStorage.getItem('expiry-tracker-theme');
     if (saved === 'light' || saved === 'dark') setTheme(saved);
-    setRole(roleFromToken());
+    const sessionUser = sessionUserFromToken();
+    setRole(sessionUser.role);
+    setUserName(sessionUser.name);
+    const syncAuth = () => {
+      const next = sessionUserFromToken();
+      setRole(next.role);
+      setUserName(next.name);
+    };
+    window.addEventListener('expiry-tracker-auth-change', syncAuth);
+    return () => window.removeEventListener('expiry-tracker-auth-change', syncAuth);
   }, []);
 
   useEffect(() => {
@@ -165,7 +176,7 @@ export default function WorkspaceChrome({ children }: Props) {
           <Link href="/settings" onClick={navigate} className={`chrome-nav-item ${active('/settings') ? 'active' : ''}`}><Icon name="settings" /><span>{t('settings')}</span></Link>
         </nav>
       </>}
-      <div className="chrome-user"><div className="chrome-avatar">{initials}</div><div className="chrome-user-meta"><strong>Admin User</strong><span>{role}</span></div><button onClick={logout} title={t('signOut')}>↗</button></div>
+      <div className="chrome-user"><div className="chrome-avatar">{initials}</div><div className="chrome-user-meta"><strong>{userName}</strong><span>{role}</span></div><button onClick={logout} title={t('signOut')}>↗</button></div>
     </aside>
     <section className="chrome-main">
       <header className="chrome-topbar">
@@ -174,7 +185,7 @@ export default function WorkspaceChrome({ children }: Props) {
           <button type="button" className="chrome-icon-button" aria-label={lang === 'id' ? 'Notifikasi' : 'Notifications'}>♧</button>
           <button type="button" className="chrome-theme-button" onClick={() => setTheme(value => value === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☼' : '☾'} {theme === 'dark' ? t('dark') : t('light')}</button>
           <button type="button" className="chrome-theme-button" onClick={() => setLang(lang === 'id' ? 'en' : 'id')} aria-label={t('language')}>{lang.toUpperCase()}</button>
-          <div className="chrome-profile"><div className="chrome-avatar small">{initials}</div><div><strong>Admin User</strong><span>{role}</span></div><span>⌄</span></div>
+          <div className="chrome-profile"><div className="chrome-avatar small">{initials}</div><div><strong>{userName}</strong><span>{role}</span></div><span>⌄</span></div>
         </div>
       </header>
       <div className="chrome-content">{children}</div>
