@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { UsersModule } from '../users/users.module';
 import { OfficeAutomationController } from './office-automation.controller';
 import { OfficeAutomationService } from './office-automation.service';
 
 @Module({
-  imports: [AuthModule, PrismaModule],
+  imports: [AuthModule, PrismaModule, UsersModule],
   controllers: [OfficeAutomationController],
   providers: [OfficeAutomationService],
   exports: [OfficeAutomationService],
