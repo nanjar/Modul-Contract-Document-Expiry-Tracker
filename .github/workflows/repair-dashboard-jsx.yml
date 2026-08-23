@@ -19,7 +19,7 @@ jobs:
           path = Path('frontend/app/page.tsx')
           text = path.read_text()
           old = '</Link>); }) : <div className="empty-attention">'
-          new = '</Link> }) : <div className="empty-attention">'
+          new = '</Link>; }) : <div className="empty-attention">'
           if old not in text:
               raise SystemExit('Expected broken JSX sequence was not found')
           path.write_text(text.replace(old, new, 1))
