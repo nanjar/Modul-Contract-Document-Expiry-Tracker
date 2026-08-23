@@ -101,7 +101,6 @@ export class UsersService {
   }
 
   async update(id: string, input: {
-    email?: string;
     name?: string;
     password?: string;
     role?: Role;
@@ -130,14 +129,6 @@ export class UsersService {
       await this.assertNotLastActiveSuperuser(id);
     }
 
-    const email = input.email?.toLowerCase().trim();
-    if (email && email !== existing.email) {
-      const duplicate = await this.prisma.user.findUnique({ where: { email } });
-      if (duplicate) {
-        throw new ConflictException('Email is already registered');
-      }
-    }
-
     const passwordHash = input.password
       ? await argon2.hash(input.password)
       : undefined;
@@ -145,7 +136,6 @@ export class UsersService {
     const user = await this.prisma.user.update({
       where: { id },
       data: {
-        ...(email !== undefined ? { email } : {}),
         ...(input.name !== undefined ? { name: input.name.trim() } : {}),
         ...(input.role !== undefined ? { role: input.role } : {}),
         ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
