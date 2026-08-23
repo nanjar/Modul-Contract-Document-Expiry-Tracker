@@ -12,6 +12,7 @@ import { StorageModule } from './storage/storage.module';
 import { UsersModule } from './users/users.module';
 import { SettingsModule } from './settings/settings.module';
 import { ProfileModule } from './profile/profile.module';
+import { OfficeAutomationModule } from './office-automation/office-automation.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -28,6 +29,7 @@ import { HealthController } from './health.controller';
     UsersModule,
     SettingsModule,
     ProfileModule,
+    OfficeAutomationModule,
   ],
   controllers: [HealthController],
 })
