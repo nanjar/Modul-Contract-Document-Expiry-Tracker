@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,21 +21,14 @@ export class ProfileService {
     return user;
   }
 
-  async update(id: string, input: { name?: string; email?: string }) {
+  async update(id: string, input: { name?: string }) {
     const existing = await this.prisma.user.findUnique({ where: { id } });
     if (!existing || !existing.isActive) throw new UnauthorizedException('User account is not available');
-
-    const email = input.email?.toLowerCase().trim();
-    if (email && email !== existing.email) {
-      const duplicate = await this.prisma.user.findUnique({ where: { email } });
-      if (duplicate) throw new ConflictException('Email is already registered');
-    }
 
     const user = await this.prisma.user.update({
       where: { id },
       data: {
         ...(input.name !== undefined ? { name: input.name.trim() } : {}),
-        ...(email !== undefined ? { email } : {}),
       },
       select: { id: true, email: true, name: true, role: true, isActive: true, createdAt: true, updatedAt: true },
     });
