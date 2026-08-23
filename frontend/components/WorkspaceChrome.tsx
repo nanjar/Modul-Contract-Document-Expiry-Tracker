@@ -4,6 +4,7 @@ import { FormEvent, ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useLanguage } from './LanguageProvider';
+import DashboardProfileBridge from './DashboardProfileBridge';
 
 type Role = 'SUPERUSER' | 'EDITOR' | 'VIEWER';
 type Props = { children: ReactNode };
@@ -94,7 +95,7 @@ export default function WorkspaceChrome({ children }: Props) {
     return () => document.removeEventListener('pointerdown', closeOnOutsidePointer);
   }, [profileOpen]);
 
-  if (pathname === '/') return <>{children}</>;
+  if (pathname === '/') return <><DashboardProfileBridge />{children}</>;
   function navigate() { window.setTimeout(() => window.dispatchEvent(new CustomEvent('expiry-tracker-route-change')), 0); }
   function search(event: FormEvent) { event.preventDefault(); const value = query.trim(); if (pathname !== '/documents') { if (value) router.push(`/documents?search=${encodeURIComponent(value)}`); else router.push('/documents'); } else { const params = new URLSearchParams(window.location.search); if (value) params.set('search', value); else params.delete('search'); const nextQuery = params.toString(); router.push(`/documents${nextQuery ? `?${nextQuery}` : ''}`); } window.dispatchEvent(new CustomEvent('expiry-tracker-search', { detail: value })); window.setTimeout(() => window.dispatchEvent(new CustomEvent('expiry-tracker-route-change')), 0); }
   function logout() { sessionStorage.removeItem('expiry-tracker-token'); window.dispatchEvent(new Event('expiry-tracker-auth-change')); router.push('/'); }
