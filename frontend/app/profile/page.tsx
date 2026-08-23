@@ -37,9 +37,8 @@ export default function ProfilePage() {
   async function saveProfile(event: FormEvent) {
     event.preventDefault(); setProfileError(''); setProfileMessage('');
     if (name.trim().length < 2) { setProfileError('Name must be at least 2 characters.'); return; }
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setProfileError('Please enter a valid email address.'); return; }
     setSaving(true);
-    try { const response = await fetch(`${API_URL}/profile`, { method: 'PATCH', headers: headers(), body: JSON.stringify({ name: name.trim(), email: email.trim() }) }); if (!response.ok) throw new Error(await messageFrom(response, 'Unable to update profile.')); const data = await response.json(); setProfile(data.user); setName(data.user.name); setEmail(data.user.email); sessionStorage.setItem('expiry-tracker-token', data.accessToken); window.dispatchEvent(new Event('expiry-tracker-auth-change')); setProfileMessage('Profile updated successfully.'); }
+    try { const response = await fetch(`${API_URL}/profile`, { method: 'PATCH', headers: headers(), body: JSON.stringify({ name: name.trim() }) }); if (!response.ok) throw new Error(await messageFrom(response, 'Unable to update profile.')); const data = await response.json(); setProfile(data.user); setName(data.user.name); setEmail(data.user.email); sessionStorage.setItem('expiry-tracker-token', data.accessToken); window.dispatchEvent(new Event('expiry-tracker-auth-change')); setProfileMessage('Profile updated successfully.'); }
     catch (error) { setProfileError(error instanceof Error ? error.message : 'Unable to update profile.'); }
     finally { setSaving(false); }
   }
@@ -59,9 +58,9 @@ export default function ProfilePage() {
 
   return <main className="workspace profile-page">
     <header className="workspace-head"><div><p className="eyebrow">ACCOUNT</p><h1>Profile</h1><p>Manage your personal account information and security.</p></div><span className="profile-role-badge">{profile?.role}</span></header>
-    <section className="profile-card"><div className="profile-card-title"><div><h2>Personal information</h2><p>Update the name and email used across the workspace.</p></div></div>
+    <section className="profile-card"><div className="profile-card-title"><div><h2>Personal information</h2><p>Update the name used across the workspace. Email is managed by the system.</p></div></div>
       {profileError && <div className="profile-inline-error">{profileError}</div>}{profileMessage && <div className="profile-inline-success">{profileMessage}</div>}
-      <form onSubmit={saveProfile} noValidate className="profile-form"><label>Name<input value={name} onChange={e => setName(e.target.value)} /></label><label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} /></label><label>Role<input value={profile?.role ?? ''} disabled /></label><div><button className="profile-primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button></div></form>
+      <form onSubmit={saveProfile} noValidate className="profile-form"><label>Name<input value={name} onChange={e => setName(e.target.value)} /></label><label>Email<input type="email" value={email} disabled readOnly aria-readonly="true" /></label><label>Role<input value={profile?.role ?? ''} disabled /></label><div><button className="profile-primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button></div></form>
     </section>
     <section className="profile-card" id="security"><div className="profile-card-title"><div><h2>Security</h2><p>Change your password. Your current password is required.</p></div></div>
       {passwordError && <div className="profile-inline-error">{passwordError}</div>}{passwordMessage && <div className="profile-inline-success">{passwordMessage}</div>}
