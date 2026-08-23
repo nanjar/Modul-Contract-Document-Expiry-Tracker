@@ -110,13 +110,13 @@ export default function WorkspaceChrome({ children }: Props) {
     <div className="chrome-profile-menu-head"><div className="chrome-avatar small">{initials}</div><div><strong>{userName}</strong><span>{role}</span></div></div>
     <div className="chrome-profile-menu-divider" />
     <Link href="/profile" onClick={() => setProfileOpen(false)} role="menuitem" className="chrome-menu-item">
-      <Icon name="profile" /><span className="chrome-menu-copy"><strong>{t('profile')}</strong><small>{lang === 'id' ? 'Nama, email & akun' : 'Name, email & account'}</small></span>
+      <Icon name="profile" /><div className="chrome-menu-copy"><strong>{t('profile')}</strong><small>{lang === 'id' ? 'Nama, email & akun' : 'Name, email & account'}</small></div>
     </Link>
     <Link href="/profile#security" onClick={() => setProfileOpen(false)} role="menuitem" className="chrome-menu-item">
-      <Icon name="lock" /><span className="chrome-menu-copy"><strong>{t('security')}</strong><small>{lang === 'id' ? 'Ganti password' : 'Change password'}</small></span>
+      <Icon name="lock" /><div className="chrome-menu-copy"><strong>{t('security')}</strong><small>{lang === 'id' ? 'Ganti password' : 'Change password'}</small></div>
     </Link>
     <button type="button" onClick={logout} role="menuitem" className="chrome-menu-item">
-      <span className="chrome-menu-signout">↗</span><span className="chrome-menu-copy"><strong>{t('signOut')}</strong><small>{lang === 'id' ? 'Keluar dari sesi' : 'End this session'}</small></span>
+      <span className="chrome-menu-signout">↗</span><div className="chrome-menu-copy"><strong>{t('signOut')}</strong><small>{lang === 'id' ? 'Keluar dari sesi' : 'End this session'}</small></div>
     </button>
   </div> : null;
 
