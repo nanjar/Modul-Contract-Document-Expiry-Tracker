@@ -15,7 +15,9 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../auth/roles.guard';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateModuleAccessDto } from './dto/update-module-access.dto';
+import { UpdateTelegramIdentityDto } from './dto/update-telegram-identity.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { TelegramIdentityService } from './telegram-identity.service';
 import { UsersService } from './users.service';
 
 @ApiTags('users')
@@ -24,7 +26,10 @@ import { UsersService } from './users.service';
 @Controller('users')
 @Roles(Role.SUPERUSER)
 export class UsersController {
-  constructor(private readonly users: UsersService) {}
+  constructor(
+    private readonly users: UsersService,
+    private readonly telegram: TelegramIdentityService,
+  ) {}
 
   @Get()
   list() {
@@ -58,6 +63,20 @@ export class UsersController {
     @Req() req: any,
   ) {
     return this.users.updateModuleAccess(id, dto, req.user.sub);
+  }
+
+  @Patch(':id/telegram')
+  updateTelegram(
+    @Param('id') id: string,
+    @Body() dto: UpdateTelegramIdentityDto,
+    @Req() req: any,
+  ) {
+    return this.telegram.set(id, dto.chatId, dto.username, req.user.sub);
+  }
+
+  @Delete(':id/telegram')
+  removeTelegram(@Param('id') id: string, @Req() req: any) {
+    return this.telegram.remove(id, req.user.sub);
   }
 
   @Delete(':id')
