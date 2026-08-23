@@ -106,17 +106,18 @@ export default function WorkspaceChrome({ children }: Props) {
     ? { left: 16, bottom: 82, top: 'auto', right: 'auto' }
     : { right: 20, top: 72, left: 'auto', bottom: 'auto' };
 
-  const menuItemStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr)', alignItems: 'center', columnGap: 12, width: '100%', minHeight: 58, padding: '11px 14px', border: 0, borderRadius: 12, textAlign: 'left', boxSizing: 'border-box' };
-  const menuTextStyle: React.CSSProperties = { display: 'grid', gridTemplateRows: 'auto auto', gap: 3, minWidth: 0, lineHeight: 1.2 };
-  const menuTitleStyle: React.CSSProperties = { display: 'block', margin: 0, fontSize: 14, fontWeight: 750, lineHeight: 1.25, whiteSpace: 'nowrap' };
-  const menuSubtitleStyle: React.CSSProperties = { display: 'block', margin: 0, fontSize: 11, lineHeight: 1.3, opacity: .62, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
-
   const profileMenu = profileOpen ? <div className="chrome-profile-menu" data-profile-menu role="menu" onPointerDown={event => event.stopPropagation()} style={{ position: 'fixed', ...profileMenuPosition, zIndex: 9999, width: 320, maxWidth: 'calc(100vw - 24px)', minWidth: 280, padding: 12, boxSizing: 'border-box' }}>
     <div className="chrome-profile-menu-head"><div className="chrome-avatar small">{initials}</div><div><strong>{userName}</strong><span>{role}</span></div></div>
     <div className="chrome-profile-menu-divider" />
-    <Link href="/profile" onClick={() => setProfileOpen(false)} role="menuitem" style={menuItemStyle}><Icon name="profile" /><div style={menuTextStyle}><strong style={menuTitleStyle}>{t('profile')}</strong><span style={menuSubtitleStyle}>{lang === 'id' ? 'Nama, email & akun' : 'Name, email & account'}</span></div></Link>
-    <Link href="/profile#security" onClick={() => setProfileOpen(false)} role="menuitem" style={menuItemStyle}><Icon name="lock" /><div style={menuTextStyle}><strong style={menuTitleStyle}>{t('security')}</strong><span style={menuSubtitleStyle}>{lang === 'id' ? 'Ganti password' : 'Change password'}</span></div></Link>
-    <button type="button" onClick={logout} role="menuitem" style={menuItemStyle}><span className="chrome-menu-signout" style={{ width: 22, display: 'grid', placeItems: 'center' }}>↗</span><div style={menuTextStyle}><strong style={menuTitleStyle}>{t('signOut')}</strong><span style={menuSubtitleStyle}>{lang === 'id' ? 'Keluar dari sesi' : 'End this session'}</span></div></button>
+    <Link href="/profile" onClick={() => setProfileOpen(false)} role="menuitem" className="chrome-menu-item">
+      <Icon name="profile" /><span className="chrome-menu-copy"><strong>{t('profile')}</strong><small>{lang === 'id' ? 'Nama, email & akun' : 'Name, email & account'}</small></span>
+    </Link>
+    <Link href="/profile#security" onClick={() => setProfileOpen(false)} role="menuitem" className="chrome-menu-item">
+      <Icon name="lock" /><span className="chrome-menu-copy"><strong>{t('security')}</strong><small>{lang === 'id' ? 'Ganti password' : 'Change password'}</small></span>
+    </Link>
+    <button type="button" onClick={logout} role="menuitem" className="chrome-menu-item">
+      <span className="chrome-menu-signout">↗</span><span className="chrome-menu-copy"><strong>{t('signOut')}</strong><small>{lang === 'id' ? 'Keluar dari sesi' : 'End this session'}</small></span>
+    </button>
   </div> : null;
 
   return <div className="workspace-chrome" data-theme={theme}>
