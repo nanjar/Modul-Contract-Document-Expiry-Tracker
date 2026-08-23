@@ -88,14 +88,26 @@ export default function UsersPage() {
     finally { setSaving(false); }
   }
 
-  async function deactivate(user: User) {
-    if (!confirm(`Deactivate ${user.email}?`)) return;
+  async function setActive(user: User, isActive: boolean) {
+    const action = isActive ? 'reactivate' : 'deactivate';
+    if (!confirm(`${isActive ? 'Reactivate' : 'Deactivate'} ${user.email}?`)) return;
+    setError('');
     try {
-      const response = await fetch(`${API_URL}/users/${user.id}`, { method: 'DELETE', headers: getHeaders() });
+      const headers = getHeaders();
+      headers.set('Content-Type', 'application/json');
+      const response = await fetch(`${API_URL}/users/${user.id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ isActive }),
+      });
       if (response.status === 401 || response.status === 403) { setAuthorized(false); return; }
-      if (!response.ok) { const payload = await response.json().catch(() => null); throw new Error(payload?.message ?? 'Unable to deactivate user'); }
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        const message = Array.isArray(payload?.message) ? payload.message.join(', ') : payload?.message ?? `Unable to ${action} user`;
+        throw new Error(message);
+      }
       await load();
-    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to deactivate user'); }
+    } catch (err) { setError(err instanceof Error ? err.message : `Unable to ${action} user`); }
   }
 
   const cardStyle = { background: '#fff', border: '1px solid #e8ecf2', borderRadius: 18, boxShadow: '0 12px 30px rgba(25,40,70,.05)' } as const;
@@ -113,7 +125,7 @@ export default function UsersPage() {
       {!authorized ? <div role="alert" style={permissionStyle}>You do not have permission to manage users and access.</div> : <>
         {error && <div style={pageErrorStyle}>{error}</div>}
         <div style={{ ...cardStyle, overflow: 'hidden' }}>
-          {loading ? <div style={{ padding: 40, color: '#718096' }}>Loading users…</div> : users.length === 0 ? <div style={{ padding: 50, textAlign: 'center', color: '#718096' }}>No users found.</div> : <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr>{['User', 'Role', 'Status', 'Created', ''].map((heading, index) => <th key={index} style={tableHeaderStyle}>{heading}</th>)}</tr></thead><tbody>{users.map((user) => <tr key={user.id}><td style={tableCellStyle}><div style={{ fontWeight: 800, color: '#202b42' }}>{user.name}</div><div style={{ fontSize: 13, color: '#7b8799', marginTop: 3 }}>{user.email}</div></td><td style={tableCellStyle}><RoleBadge role={user.role} /></td><td style={tableCellStyle}><span style={{ color: user.isActive ? '#16845b' : '#9aa4b2', fontWeight: 700, fontSize: 13 }}>{user.isActive ? 'Active' : 'Inactive'}</span></td><td style={{ ...tableCellStyle, color: '#718096', fontSize: 13 }}>{new Date(user.createdAt).toLocaleDateString()}</td><td style={{ ...tableCellStyle, whiteSpace: 'nowrap' }}><button onClick={() => edit(user)} style={linkButtonStyle}>Edit</button>{user.isActive && <button onClick={() => deactivate(user)} style={{ ...linkButtonStyle, color: '#b42318' }}>Deactivate</button>}</td></tr>)}</tbody></table></div>}
+          {loading ? <div style={{ padding: 40, color: '#718096' }}>Loading users…</div> : users.length === 0 ? <div style={{ padding: 50, textAlign: 'center', color: '#718096' }}>No users found.</div> : <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr>{['User', 'Role', 'Status', 'Created', ''].map((heading, index) => <th key={index} style={tableHeaderStyle}>{heading}</th>)}</tr></thead><tbody>{users.map((user) => <tr key={user.id}><td style={tableCellStyle}><div style={{ fontWeight: 800, color: '#202b42' }}>{user.name}</div><div style={{ fontSize: 13, color: '#7b8799', marginTop: 3 }}>{user.email}</div></td><td style={tableCellStyle}><RoleBadge role={user.role} /></td><td style={tableCellStyle}><span style={{ color: user.isActive ? '#16845b' : '#9aa4b2', fontWeight: 700, fontSize: 13 }}>{user.isActive ? 'Active' : 'Inactive'}</span></td><td style={{ ...tableCellStyle, color: '#718096', fontSize: 13 }}>{new Date(user.createdAt).toLocaleDateString()}</td><td style={{ ...tableCellStyle, whiteSpace: 'nowrap' }}><button onClick={() => edit(user)} style={linkButtonStyle}>Edit</button>{user.isActive ? <button onClick={() => setActive(user, false)} style={{ ...linkButtonStyle, color: '#b42318' }}>Deactivate</button> : <button onClick={() => setActive(user, true)} style={{ ...linkButtonStyle, color: '#16845b' }}>Reactivate</button>}</td></tr>)}</tbody></table></div>}
         </div>
         <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>{[['SUPERUSER', 'Full administration and access control'], ['EDITOR', 'Create and manage documents and reminders'], ['VIEWER', 'Read-only workspace access']].map(([roleName, description]) => <div key={roleName} style={{ ...cardStyle, padding: 17 }}><RoleBadge role={roleName as Role} /><p style={{ fontSize: 13, color: '#718096', margin: '10px 0 0' }}>{description}</p></div>)}</div>
         {open && <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.42)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 50 }}><form noValidate onSubmit={save} style={{ width: '100%', maxWidth: 500, background: '#fff', borderRadius: 20, padding: 28, boxShadow: '0 25px 80px rgba(0,0,0,.2)' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><h2 style={{ margin: 0, color: '#17213a' }}>{editing ? 'Edit user' : 'Add user'}</h2><p style={{ margin: '6px 0 22px', color: '#718096', fontSize: 13 }}>{editing ? 'Update identity and access role.' : 'Create an account with the appropriate access level.'}</p></div><button type="button" onClick={reset} style={{ border: 0, background: 'transparent', fontSize: 22, color: '#8792a4' }}>×</button></div>{formError && <div role="alert" style={formErrorStyle}>{formError}</div>}<label style={fieldLabelStyle}>Name<input value={name} onChange={(event) => { setName(event.target.value); setFormError(''); }} type="text" style={fieldInputStyle} /></label><label style={fieldLabelStyle}>Email<input value={email} onChange={(event) => { setEmail(event.target.value); setFormError(''); }} type="email" style={fieldInputStyle} /></label><label style={fieldLabelStyle}>Password<input value={password} onChange={(event) => { setPassword(event.target.value); setFormError(''); }} type="password" placeholder={editing ? 'Leave blank to keep current password' : ''} style={fieldInputStyle} /></label><label style={fieldLabelStyle}>Role<select value={role} onChange={(event) => { setRole(event.target.value as Role); setFormError(''); }} style={{ ...fieldInputStyle, background: '#fff' }}><option value="VIEWER">Viewer</option><option value="EDITOR">Editor</option><option value="SUPERUSER">Superuser</option></select></label><div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 25 }}><button type="button" onClick={reset} style={secondaryButtonStyle}>Cancel</button><button type="submit" disabled={saving} style={primaryButtonStyle}>{saving ? 'Saving…' : 'Save user'}</button></div></form></div>}
