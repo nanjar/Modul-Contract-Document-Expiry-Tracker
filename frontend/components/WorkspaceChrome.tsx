@@ -8,6 +8,7 @@ import { useLanguage } from './LanguageProvider';
 type Role = 'SUPERUSER' | 'EDITOR' | 'VIEWER';
 type Props = { children: ReactNode };
 type SessionUser = { name: string; role: Role; email?: string };
+type ProfileMenuSource = 'sidebar' | 'topbar';
 
 const nav = [
   ['overview', '/', 'home'], ['documents', '/documents', 'document'], ['reminders', '/reminders', 'bell'],
@@ -56,7 +57,8 @@ function Brand() { return <span className="chrome-brand-icon"><svg viewBox="0 0 
 export default function WorkspaceChrome({ children }: Props) {
   const pathname = usePathname(); const router = useRouter(); const { lang, setLang } = useLanguage();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark'); const [role, setRole] = useState<Role>('VIEWER');
-  const [userName, setUserName] = useState('User'); const [query, setQuery] = useState(''); const [archiveActive, setArchiveActive] = useState(false); const [profileOpen, setProfileOpen] = useState(false);
+  const [userName, setUserName] = useState('User'); const [query, setQuery] = useState(''); const [archiveActive, setArchiveActive] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false); const [profileMenuSource, setProfileMenuSource] = useState<ProfileMenuSource>('topbar');
   const t = (key: Key) => copy[lang][key];
 
   useEffect(() => {
@@ -80,43 +82,57 @@ export default function WorkspaceChrome({ children }: Props) {
     syncDocumentRoute(); window.addEventListener('popstate', syncDocumentRoute); window.addEventListener('expiry-tracker-route-change', syncDocumentRoute);
     return () => { window.removeEventListener('popstate', syncDocumentRoute); window.removeEventListener('expiry-tracker-route-change', syncDocumentRoute); };
   }, [pathname]);
-
   useEffect(() => { setProfileOpen(false); }, [pathname]);
+  useEffect(() => {
+    if (!profileOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('[data-profile-control], [data-profile-menu]')) return;
+      setProfileOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer);
+  }, [profileOpen]);
 
   if (pathname === '/') return <>{children}</>;
   function navigate() { window.setTimeout(() => window.dispatchEvent(new CustomEvent('expiry-tracker-route-change')), 0); }
   function search(event: FormEvent) { event.preventDefault(); const value = query.trim(); if (pathname !== '/documents') { if (value) router.push(`/documents?search=${encodeURIComponent(value)}`); else router.push('/documents'); } else { const params = new URLSearchParams(window.location.search); if (value) params.set('search', value); else params.delete('search'); const nextQuery = params.toString(); router.push(`/documents${nextQuery ? `?${nextQuery}` : ''}`); } window.dispatchEvent(new CustomEvent('expiry-tracker-search', { detail: value })); window.setTimeout(() => window.dispatchEvent(new CustomEvent('expiry-tracker-route-change')), 0); }
   function logout() { sessionStorage.removeItem('expiry-tracker-token'); window.dispatchEvent(new Event('expiry-tracker-auth-change')); router.push('/'); }
-  const openProfile = () => setProfileOpen(true);
-  const toggleProfile = () => setProfileOpen(value => !value);
+  function toggleProfile(source: ProfileMenuSource) { setProfileMenuSource(source); setProfileOpen(value => !value); }
   const initials = role === 'SUPERUSER' ? 'AD' : role === 'EDITOR' ? 'ED' : 'VW';
   const active = (href: string) => href === '/documents?status=ARCHIVED' ? pathname === '/documents' && archiveActive : pathname === href;
+  const profileMenuPosition = profileMenuSource === 'sidebar'
+    ? { left: 16, bottom: 82, top: 'auto', right: 'auto' }
+    : { right: 20, top: 72, left: 'auto', bottom: 'auto' };
+
+  const profileMenu = profileOpen ? <div className="chrome-profile-menu" data-profile-menu role="menu" style={{ position: 'fixed', ...profileMenuPosition, zIndex: 9999, minWidth: 280 }}>
+    <div className="chrome-profile-menu-head"><div className="chrome-avatar small">{initials}</div><div><strong>{userName}</strong><span>{role}</span></div></div>
+    <div className="chrome-profile-menu-divider" />
+    <Link href="/profile" onClick={() => setProfileOpen(false)} role="menuitem"><Icon name="profile" /><div><strong>{t('profile')}</strong><span>{lang === 'id' ? 'Nama, email & akun' : 'Name, email & account'}</span></div></Link>
+    <Link href="/profile#security" onClick={() => setProfileOpen(false)} role="menuitem"><Icon name="lock" /><div><strong>{t('security')}</strong><span>{lang === 'id' ? 'Ganti password' : 'Change password'}</span></div></Link>
+    <button type="button" onClick={logout} role="menuitem"><span className="chrome-menu-signout">↗</span><div><strong>{t('signOut')}</strong><span>{lang === 'id' ? 'Keluar dari sesi' : 'End this session'}</span></div></button>
+  </div> : null;
 
   return <div className="workspace-chrome" data-theme={theme}>
     <aside className="chrome-sidebar">
       <div className="chrome-brand"><Brand /><span>Expiry Tracker</span></div><div className="chrome-section-label">{lang === 'id' ? 'UMUM' : 'GENERAL'}</div>
       <nav className="chrome-nav">{nav.map(([key, href, icon]) => <Link key={href} href={href} onClick={navigate} className={`chrome-nav-item ${active(href) ? 'active' : ''}`}><Icon name={icon} /><span>{t(key)}</span></Link>)}</nav>
       {role === 'SUPERUSER' && <><div className="chrome-section-label admin">{lang === 'id' ? 'ADMINISTRASI' : 'ADMINISTRATION'}</div><nav className="chrome-nav"><Link href="/users" onClick={navigate} className={`chrome-nav-item ${active('/users') ? 'active' : ''}`}><Icon name="users" /><span>{t('users')}</span></Link><Link href="/settings" onClick={navigate} className={`chrome-nav-item ${active('/settings') ? 'active' : ''}`}><Icon name="settings" /><span>{t('settings')}</span></Link></nav></>}
-      <div className="chrome-user"><div className="chrome-avatar">{initials}</div><div className="chrome-user-meta"><strong>{userName}</strong><span>{role}</span></div><button type="button" onClick={openProfile} title={t('profile')} aria-label={t('profile')}>⌄</button></div>
+      <div className="chrome-user">
+        <button type="button" className="chrome-profile chrome-sidebar-profile" data-profile-control onClick={() => toggleProfile('sidebar')} aria-haspopup="menu" aria-expanded={profileOpen}>
+          <div className="chrome-avatar">{initials}</div><div className="chrome-user-meta"><strong>{userName}</strong><span>{role}</span></div><span>⌄</span>
+        </button>
+      </div>
     </aside>
     <section className="chrome-main"><header className="chrome-topbar">
       <form onSubmit={search} className="chrome-search"><Icon name="search" /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t('search')} /><kbd>⌘ K</kbd></form>
       <div className="chrome-top-actions"><button type="button" className="chrome-icon-button" aria-label={lang === 'id' ? 'Notifikasi' : 'Notifications'}>♧</button><button type="button" className="chrome-theme-button" onClick={() => setTheme(value => value === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☼' : '☾'} {theme === 'dark' ? t('dark') : t('light')}</button><button type="button" className="chrome-theme-button" onClick={() => setLang(lang === 'id' ? 'en' : 'id')} aria-label={t('language')}>{lang.toUpperCase()}</button>
         <div className="chrome-profile-wrap">
-          <button type="button" className={`chrome-profile ${profileOpen ? 'open' : ''}`} onPointerDown={event => event.stopPropagation()} onClick={event => { event.preventDefault(); event.stopPropagation(); toggleProfile(); }} aria-haspopup="menu" aria-expanded={profileOpen}>
+          <button type="button" className={`chrome-profile ${profileOpen && profileMenuSource === 'topbar' ? 'open' : ''}`} data-profile-control onClick={() => toggleProfile('topbar')} aria-haspopup="menu" aria-expanded={profileOpen && profileMenuSource === 'topbar'}>
             <div className="chrome-avatar small">{initials}</div><div><strong>{userName}</strong><span>{role}</span></div><span>⌄</span>
           </button>
-          {profileOpen && <>
-            <button type="button" aria-label="Close profile menu" onClick={() => setProfileOpen(false)} style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', border: 0, padding: 0, margin: 0, background: 'transparent', zIndex: 9998, cursor: 'default' }} />
-            <div className="chrome-profile-menu" role="menu" style={{ position: 'fixed', top: 72, right: 20, zIndex: 9999, minWidth: 280 }} onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
-              <div className="chrome-profile-menu-head"><div className="chrome-avatar small">{initials}</div><div><strong>{userName}</strong><span>{role}</span></div></div><div className="chrome-profile-menu-divider" />
-              <Link href="/profile" onClick={() => setProfileOpen(false)} role="menuitem"><Icon name="profile" /><div><strong>{t('profile')}</strong><span>{lang === 'id' ? 'Nama, email & akun' : 'Name, email & account'}</span></div></Link>
-              <Link href="/profile#security" onClick={() => setProfileOpen(false)} role="menuitem"><Icon name="lock" /><div><strong>{t('security')}</strong><span>{lang === 'id' ? 'Ganti password' : 'Change password'}</span></div></Link>
-              <button type="button" onClick={logout} role="menuitem"><span className="chrome-menu-signout">↗</span><div><strong>{t('signOut')}</strong><span>{lang === 'id' ? 'Keluar dari sesi' : 'End this session'}</span></div></button>
-            </div>
-          </>}
         </div>
       </div>
-    </header><div className="chrome-content">{children}</div></section>
+    </header><div className="chrome-content">{children}</div>{profileMenu}</section>
   </div>;
 }
