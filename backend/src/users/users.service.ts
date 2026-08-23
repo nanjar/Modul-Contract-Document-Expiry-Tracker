@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
-import { Role } from '@prisma/client';
+import { ModuleKey, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -26,6 +26,10 @@ export class UsersService {
         isActive: true,
         createdAt: true,
         updatedAt: true,
+        moduleAccess: true,
+        telegramIdentities: {
+          select: { chatId: true, username: true, isVerified: true },
+        },
       },
     });
 
@@ -43,14 +47,62 @@ export class UsersService {
         isActive: true,
         createdAt: true,
         updatedAt: true,
+        moduleAccess: true,
+        telegramIdentities: {
+          select: { chatId: true, username: true, isVerified: true },
+        },
       },
     });
 
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
+    if (!user) throw new NotFoundException('User not found');
     return user;
+  }
+
+  async getModuleAccess(userId: string) {
+    await this.assertUserExists(userId);
+    return this.prisma.userModuleAccess.findMany({
+      where: { userId },
+      orderBy: { module: 'asc' },
+    });
+  }
+
+  async updateModuleAccess(
+    userId: string,
+    input: { module: ModuleKey; permissions: string[] },
+    actorId: string,
+  ) {
+    await this.assertUserExists(userId);
+
+    const existing = await this.prisma.userModuleAccess.findUnique({
+      where: { userId_module: { userId, module: input.module } },
+    });
+
+    const access = await this.prisma.userModuleAccess.upsert({
+      where: { userId_module: { userId, module: input.module } },
+      create: {
+        userId,
+        module: input.module,
+        permissions: [...new Set(input.permissions)],
+      },
+      update: {
+        permissions: [...new Set(input.permissions)],
+      },
+    });
+
+    await this.audit.log({
+      actorId,
+      action: 'UPDATE',
+      entity: 'UserModuleAccess',
+      entityId: access.id,
+      metadata: {
+        userId,
+        module: input.module,
+        previousPermissions: existing?.permissions ?? [],
+        permissions: access.permissions,
+      },
+    });
+
+    return access;
   }
 
   async create(input: {
@@ -62,10 +114,7 @@ export class UsersService {
   }) {
     const email = input.email.toLowerCase().trim();
     const existing = await this.prisma.user.findUnique({ where: { email } });
-
-    if (existing) {
-      throw new ConflictException('Email is already registered');
-    }
+    if (existing) throw new ConflictException('Email is already registered');
 
     const passwordHash = await argon2.hash(input.password);
     const user = await this.prisma.user.create({
@@ -91,31 +140,28 @@ export class UsersService {
       action: 'CREATE',
       entity: 'User',
       entityId: user.id,
-      metadata: {
-        email: user.email,
-        role: user.role,
-      },
+      metadata: { email: user.email, role: user.role },
     });
 
     return user;
   }
 
-  async update(id: string, input: {
-    name?: string;
-    password?: string;
-    role?: Role;
-    isActive?: boolean;
-  }, actorId: string) {
+  async update(
+    id: string,
+    input: {
+      name?: string;
+      password?: string;
+      role?: Role;
+      isActive?: boolean;
+    },
+    actorId: string,
+  ) {
     const existing = await this.prisma.user.findUnique({ where: { id } });
-
-    if (!existing) {
-      throw new NotFoundException('User not found');
-    }
+    if (!existing) throw new NotFoundException('User not found');
 
     if (existing.id === actorId && input.isActive === false) {
       throw new ConflictException('You cannot deactivate your own account');
     }
-
     if (existing.id === actorId && input.role && input.role !== existing.role) {
       throw new ConflictException('You cannot change your own role');
     }
@@ -123,11 +169,10 @@ export class UsersService {
     const removingSuperuserAccess =
       existing.role === Role.SUPERUSER &&
       existing.isActive &&
-      ((input.role !== undefined && input.role !== Role.SUPERUSER) || input.isActive === false);
+      ((input.role !== undefined && input.role !== Role.SUPERUSER) ||
+        input.isActive === false);
 
-    if (removingSuperuserAccess) {
-      await this.assertNotLastActiveSuperuser(id);
-    }
+    if (removingSuperuserAccess) await this.assertNotLastActiveSuperuser(id);
 
     const passwordHash = input.password
       ? await argon2.hash(input.password)
@@ -178,15 +223,10 @@ export class UsersService {
 
   async remove(id: string, actorId: string) {
     const existing = await this.prisma.user.findUnique({ where: { id } });
-
-    if (!existing) {
-      throw new NotFoundException('User not found');
-    }
-
+    if (!existing) throw new NotFoundException('User not found');
     if (existing.id === actorId) {
       throw new ConflictException('You cannot deactivate your own account');
     }
-
     if (existing.role === Role.SUPERUSER && existing.isActive) {
       await this.assertNotLastActiveSuperuser(id);
     }
@@ -216,13 +256,23 @@ export class UsersService {
     return user;
   }
 
+  private async assertUserExists(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+  }
+
   private async assertNotLastActiveSuperuser(id: string) {
     const activeSuperusers = await this.prisma.user.count({
       where: { role: Role.SUPERUSER, isActive: true },
     });
 
     if (activeSuperusers <= 1) {
-      throw new ConflictException('At least one active superuser account must remain');
+      throw new ConflictException(
+        'At least one active superuser account must remain',
+      );
     }
   }
 }
