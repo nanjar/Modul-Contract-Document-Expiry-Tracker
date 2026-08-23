@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 type Role = 'SUPERUSER' | 'EDITOR' | 'VIEWER';
 type User = {
@@ -15,6 +16,17 @@ type User = {
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+
+function getRole(): Role | null {
+  try {
+    const token = window.sessionStorage.getItem('expiry-tracker-token');
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return (payload.role ?? null) as Role | null;
+  } catch {
+    return null;
+  }
+}
 
 function getHeaders(): Headers {
   const headers = new Headers();
@@ -46,6 +58,8 @@ function validationMessage(name: string, email: string, password: string, editin
 }
 
 export default function UsersPage() {
+  const router = useRouter();
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -58,11 +72,24 @@ export default function UsersPage() {
   const [role, setRole] = useState<Role>('VIEWER');
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    const roleFromToken = getRole();
+    if (roleFromToken !== 'SUPERUSER') {
+      router.replace('/');
+      return;
+    }
+    setAuthorized(true);
+  }, [router]);
+
   async function load() {
     setLoading(true);
     setError('');
     try {
       const response = await fetch(`${API_URL}/users`, { headers: getHeaders() });
+      if (response.status === 401 || response.status === 403) {
+        router.replace('/');
+        return;
+      }
       if (!response.ok) throw new Error('Unable to load users');
       const data = await response.json();
       setUsers(data.items ?? data);
@@ -73,7 +100,10 @@ export default function UsersPage() {
     }
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    if (authorized !== true) return;
+    void load();
+  }, [authorized]);
 
   function reset() {
     setEditing(null); setName(''); setEmail(''); setPassword(''); setRole('VIEWER');
@@ -115,6 +145,11 @@ export default function UsersPage() {
         },
       );
 
+      if (response.status === 401 || response.status === 403) {
+        router.replace('/');
+        return;
+      }
+
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         const message = Array.isArray(payload?.message)
@@ -138,6 +173,10 @@ export default function UsersPage() {
       const response = await fetch(`${API_URL}/users/${user.id}`, {
         method: 'DELETE', headers: getHeaders(),
       });
+      if (response.status === 401 || response.status === 403) {
+        router.replace('/');
+        return;
+      }
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.message ?? 'Unable to deactivate user');
@@ -147,6 +186,8 @@ export default function UsersPage() {
       setError(err instanceof Error ? err.message : 'Unable to deactivate user');
     }
   }
+
+  if (authorized !== true) return null;
 
   return (
     <main style={{ minHeight: '100vh', background: '#f6f8fc', padding: '32px' }}>
