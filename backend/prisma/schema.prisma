@@ -31,6 +31,12 @@ enum OfficeRequestType {
   LEAVE
   ATTENDANCE
   GENERAL
+  LATE
+  WFH
+  OVERTIME
+  REIMBURSEMENT
+  BUSINESS_TRIP
+  MEETING
 }
 
 enum IntegrationEventStatus {
@@ -38,6 +44,32 @@ enum IntegrationEventStatus {
   PROCESSING
   DELIVERED
   FAILED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  LEAVE
+  WFH
+  OFF
+}
+
+enum AttendanceAction {
+  CHECK_IN
+  CHECK_OUT
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AnnouncementRecipientType {
+  ALL
+  ROLE
+  USER
 }
 
 model User {
@@ -58,6 +90,12 @@ model User {
   officeRequests     OfficeRequest[]         @relation("OfficeRequester")
   assignedTasks      OfficeTask[]            @relation("OfficeTaskAssignee")
   approvals          OfficeApproval[]        @relation("OfficeApprover")
+  attendanceRecords  AttendanceRecord[]
+  attendanceActions  AttendanceActionLog[]
+  announcements      Announcement[]          @relation("AnnouncementCreator")
+  announcementReads  AnnouncementReadReceipt[]
+  meetingsCreated    MeetingBooking[]        @relation("MeetingCreator")
+  meetingAttendees   MeetingAttendee[]
 }
 
 model UserModuleAccess {
@@ -136,21 +174,21 @@ model Reminder {
 }
 
 model OfficeRequest {
-  id            String             @id @default(uuid()) @db.Uuid
-  requestNumber String             @unique
+  id            String              @id @default(uuid()) @db.Uuid
+  requestNumber String              @unique
   type          OfficeRequestType
-  requesterId   String             @db.Uuid
+  requesterId   String              @db.Uuid
   title         String
   description   String?
   startDate     DateTime?
   endDate       DateTime?
   requiredDate  DateTime?
-  priority      String             @default("NORMAL")
+  priority      String              @default("NORMAL")
   status        OfficeRequestStatus @default(PENDING)
-  requestedAt   DateTime           @default(now())
+  requestedAt   DateTime            @default(now())
   metadata      Json?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
   cancelledAt   DateTime?
   completedAt   DateTime?
 
@@ -186,14 +224,14 @@ model OfficeTask {
 }
 
 model OfficeApproval {
-  id           String             @id @default(uuid()) @db.Uuid
-  requestId    String             @db.Uuid
-  approverId   String             @db.Uuid
+  id           String              @id @default(uuid()) @db.Uuid
+  requestId    String              @db.Uuid
+  approverId   String              @db.Uuid
   status       OfficeRequestStatus @default(PENDING)
   comment      String?
   decidedAt    DateTime?
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
   request  OfficeRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   approver User          @relation("OfficeApprover", fields: [approverId], references: [id])
@@ -217,21 +255,145 @@ model OfficeActivityLog {
 }
 
 model IntegrationEvent {
-  id            String                 @id @default(uuid()) @db.Uuid
-  event         String
-  entityId      String?
-  payload       Json
-  status        IntegrationEventStatus @default(PENDING)
-  attempts      Int                    @default(0)
-  availableAt   DateTime               @default(now())
-  processedAt   DateTime?
-  lastError     String?
-  idempotencyKey String                @unique
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
+  id             String                 @id @default(uuid()) @db.Uuid
+  event          String
+  entityId       String?
+  payload        Json
+  status         IntegrationEventStatus @default(PENDING)
+  attempts       Int                    @default(0)
+  availableAt    DateTime               @default(now())
+  processedAt    DateTime?
+  lastError      String?
+  idempotencyKey String                 @unique
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
 
   @@index([status, availableAt])
   @@index([event, entityId])
+}
+
+model AttendanceRecord {
+  id            String           @id @default(uuid()) @db.Uuid
+  userId        String           @db.Uuid
+  attendanceDate DateTime
+  status        AttendanceStatus @default(PRESENT)
+  checkInAt     DateTime?
+  checkOutAt    DateTime?
+  checkInLat    Decimal?         @db.Decimal(10, 7)
+  checkInLng    Decimal?         @db.Decimal(10, 7)
+  checkOutLat   Decimal?         @db.Decimal(10, 7)
+  checkOutLng   Decimal?         @db.Decimal(10, 7)
+  notes         String?
+  metadata      Json?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  user   User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actions AttendanceActionLog[]
+
+  @@unique([userId, attendanceDate])
+  @@index([attendanceDate, status])
+  @@index([userId, attendanceDate])
+}
+
+model AttendanceActionLog {
+  id           String           @id @default(uuid()) @db.Uuid
+  userId       String           @db.Uuid
+  attendanceId String?          @db.Uuid
+  action       AttendanceAction
+  latitude     Decimal?         @db.Decimal(10, 7)
+  longitude    Decimal?         @db.Decimal(10, 7)
+  source       String           @default("WEB")
+  metadata     Json?
+  createdAt    DateTime         @default(now())
+
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attendance AttendanceRecord? @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([attendanceId, createdAt])
+}
+
+model Announcement {
+  id            String                    @id @default(uuid()) @db.Uuid
+  title         String
+  message       String
+  status        AnnouncementStatus        @default(DRAFT)
+  recipientType AnnouncementRecipientType @default(ALL)
+  recipientRole Role?
+  createdById   String                    @db.Uuid
+  publishedAt   DateTime?
+  expiresAt     DateTime?
+  metadata      Json?
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+
+  createdBy User                     @relation("AnnouncementCreator", fields: [createdById], references: [id])
+  reads     AnnouncementReadReceipt[]
+
+  @@index([status, publishedAt])
+  @@index([recipientType, recipientRole])
+}
+
+model AnnouncementReadReceipt {
+  id             String   @id @default(uuid()) @db.Uuid
+  announcementId String   @db.Uuid
+  userId         String   @db.Uuid
+  readAt         DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@index([userId, readAt])
+}
+
+model MeetingRoom {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  location    String?
+  capacity    Int?
+  isActive    Boolean  @default(true)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  bookings MeetingBooking[]
+}
+
+model MeetingBooking {
+  id          String   @id @default(uuid()) @db.Uuid
+  roomId      String   @db.Uuid
+  createdById String   @db.Uuid
+  title       String
+  description String?
+  startsAt    DateTime
+  endsAt      DateTime
+  status      OfficeRequestStatus @default(PENDING)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  room        MeetingRoom      @relation(fields: [roomId], references: [id])
+  createdBy   User             @relation("MeetingCreator", fields: [createdById], references: [id])
+  attendees   MeetingAttendee[]
+
+  @@index([roomId, startsAt, endsAt])
+  @@index([createdById, startsAt])
+}
+
+model MeetingAttendee {
+  id        String   @id @default(uuid()) @db.Uuid
+  meetingId String   @db.Uuid
+  userId    String   @db.Uuid
+  status    String   @default("INVITED")
+  createdAt DateTime @default(now())
+
+  meeting MeetingBooking @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+  @@index([userId, status])
 }
 
 model AuditLog {
