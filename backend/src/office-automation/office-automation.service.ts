@@ -89,7 +89,7 @@ export class OfficeAutomationService {
     return this.prisma.$transaction(async (tx) => {
       const request = await tx.officeRequest.findUnique({ where: { id } });
       if (!request) throw new NotFoundException('Office request not found');
-      if (![OfficeRequestStatus.PENDING, OfficeRequestStatus.APPROVED].includes(request.status)) {
+      if (request.status !== OfficeRequestStatus.PENDING && request.status !== OfficeRequestStatus.APPROVED) {
         return request;
       }
 
