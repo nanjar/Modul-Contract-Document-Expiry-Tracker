@@ -65,6 +65,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [name, setName] = useState('');
@@ -110,6 +111,7 @@ export default function UsersPage() {
     setEmail('');
     setPassword('');
     setRole('VIEWER');
+    setFormError('');
     setOpen(false);
   }
 
@@ -119,13 +121,14 @@ export default function UsersPage() {
     setEmail(user.email);
     setPassword('');
     setRole(user.role);
+    setFormError('');
     setOpen(true);
   }
 
   async function save(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
-    setError('');
+    setFormError('');
 
     try {
       const body: {
@@ -174,15 +177,17 @@ export default function UsersPage() {
           .catch(() => null);
 
         throw new Error(
-          payload?.message ??
-            'Unable to save user',
+          Array.isArray(payload?.message)
+            ? payload.message.join(', ')
+            : payload?.message ??
+                'Unable to save user',
         );
       }
 
       reset();
       await load();
     } catch (err) {
-      setError(
+      setFormError(
         err instanceof Error
           ? err.message
           : 'Unable to save user',
@@ -624,14 +629,33 @@ export default function UsersPage() {
                 </button>
               </div>
 
+              {formError && (
+                <div
+                  role="alert"
+                  style={{
+                    padding: 12,
+                    marginBottom: 18,
+                    borderRadius: 10,
+                    background: '#fff0f0',
+                    border: '1px solid #ffd5d5',
+                    color: '#b42318',
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {formError}
+                </div>
+              )}
+
               <label style={fieldLabelStyle}>
                 Name
                 <input
                   required
                   value={name}
-                  onChange={(event) =>
-                    setName(event.target.value)
-                  }
+                  onChange={(event) => {
+                    setName(event.target.value);
+                    setFormError('');
+                  }}
                   type="text"
                   style={fieldInputStyle}
                 />
@@ -642,9 +666,10 @@ export default function UsersPage() {
                 <input
                   required
                   value={email}
-                  onChange={(event) =>
-                    setEmail(event.target.value)
-                  }
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    setFormError('');
+                  }}
                   type="email"
                   style={fieldInputStyle}
                 />
@@ -655,9 +680,10 @@ export default function UsersPage() {
                 <input
                   required={!editing}
                   value={password}
-                  onChange={(event) =>
-                    setPassword(event.target.value)
-                  }
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    setFormError('');
+                  }}
                   type="password"
                   placeholder={
                     editing
@@ -680,11 +706,12 @@ export default function UsersPage() {
 
                 <select
                   value={role}
-                  onChange={(event) =>
+                  onChange={(event) => {
                     setRole(
                       event.target.value as Role,
-                    )
-                  }
+                    );
+                    setFormError('');
+                  }}
                   style={{
                     display: 'block',
                     width: '100%',
