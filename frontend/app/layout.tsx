@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import './premium-login.css';
 import '../components/workspace-chrome.css';
 import WorkspaceChrome from '../components/WorkspaceChrome';
 import { LanguageProvider } from '../components/LanguageProvider';
