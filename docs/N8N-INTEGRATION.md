@@ -12,25 +12,38 @@ Webhook URL is configured with `N8N_WEBHOOK_URL` and authenticated with `N8N_WEB
 {
   "event": "OFFICE_REQUEST_CREATED",
   "entityId": "uuid",
-  "payload": {},
+  "payload": {
+    "requesterId": "uuid",
+    "telegramRecipients": [
+      {
+        "userId": "uuid",
+        "chatId": "123456789",
+        "username": "employee",
+        "isVerified": true
+      }
+    ]
+  },
   "idempotencyKey": "office-request-created:uuid"
 }
 ```
+
+`telegramRecipients` is resolved by NestJS at delivery time from `UserTelegramIdentity` in PostgreSQL. n8n does not need direct database access.
 
 ## Delivery semantics
 
 1. `PENDING` event is atomically claimed as `PROCESSING`.
 2. Attempt counter is incremented.
-3. n8n is called.
-4. Success becomes `DELIVERED`.
-5. Failure returns to `PENDING` with exponential backoff.
-6. After five attempts the event becomes `FAILED` and keeps the error for observability.
+3. NestJS resolves current Telegram recipients from PostgreSQL.
+4. n8n is called with the authenticated event envelope.
+5. Success becomes `DELIVERED`.
+6. Failure returns to `PENDING` with exponential backoff.
+7. After five attempts the event becomes `FAILED` and keeps the error for observability.
 
 ## Telegram
 
 n8n remains responsible for Telegram delivery. The application stores `UserTelegramIdentity.chatId` and does not embed Telegram business logic in the Office Automation module.
 
-The n8n workflow should resolve the target chat ID from the user identity and only send when a valid/verified chat ID exists.
+When a user has a Chat ID in PostgreSQL, the integration event contains that recipient. If no Chat ID exists, `telegramRecipients` is empty and n8n must not attempt to send a Telegram message for that user.
 
 ## Supported Office events
 
