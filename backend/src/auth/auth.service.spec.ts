@@ -22,9 +22,9 @@ describe('AuthService', () => {
     prisma.user.findUnique.mockResolvedValue(user); verify.mockResolvedValue(false);
     await expect(service.login(user.email, 'bad')).rejects.toThrow(UnauthorizedException);
   });
-  it('returns a JWT with the role claim for valid credentials', async () => {
+  it('returns a JWT with user identity and role claims for valid credentials', async () => {
     prisma.user.findUnique.mockResolvedValue(user); verify.mockResolvedValue(true);
     await expect(service.login(user.email, 'secret')).resolves.toEqual({ accessToken: 'jwt-token', user: { id: 'u1', email: user.email, name: user.name, role: Role.EDITOR } });
-    expect(jwt.signAsync).toHaveBeenCalledWith({ sub: 'u1', email: user.email, role: Role.EDITOR });
+    expect(jwt.signAsync).toHaveBeenCalledWith({ sub: 'u1', email: user.email, name: user.name, role: Role.EDITOR });
   });
 });
