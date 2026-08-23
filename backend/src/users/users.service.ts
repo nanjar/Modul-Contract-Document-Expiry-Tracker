@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -14,6 +15,34 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
+
+  async assertModuleAccess(userId: string, module: ModuleKey, permission?: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        role: true,
+        isActive: true,
+        moduleAccess: {
+          where: { module },
+          select: { permissions: true },
+        },
+      },
+    });
+
+    if (!user || !user.isActive) {
+      throw new ForbiddenException('User is inactive or does not exist');
+    }
+
+    if (user.role === Role.SUPERUSER) return true;
+
+    const access = user.moduleAccess[0];
+    if (!access) throw new ForbiddenException('Module access is not granted');
+    if (permission && !access.permissions.includes(permission)) {
+      throw new ForbiddenException(`Module permission required: ${permission}`);
+    }
+
+    return true;
+  }
 
   async list() {
     const users = await this.prisma.user.findMany({
@@ -84,9 +113,7 @@ export class UsersService {
         module: input.module,
         permissions: [...new Set(input.permissions)],
       },
-      update: {
-        permissions: [...new Set(input.permissions)],
-      },
+      update: { permissions: [...new Set(input.permissions)] },
     });
 
     await this.audit.log({
