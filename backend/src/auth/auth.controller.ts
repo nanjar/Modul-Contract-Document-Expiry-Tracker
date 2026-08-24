@@ -29,7 +29,19 @@ export class AuthController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  async me(@Req() req: any) { return this.prisma.user.findUnique({ where: { id: req.user.sub }, select: { id: true, email: true, name: true, role: true, isActive: true } }); }
+  async me(@Req() req: any) {
+    return this.prisma.user.findUnique({
+      where: { id: req.user.sub },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        moduleAccess: { select: { module: true, permissions: true } },
+      },
+    });
+  }
 
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
