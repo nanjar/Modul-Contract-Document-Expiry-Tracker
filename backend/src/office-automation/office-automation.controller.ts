@@ -73,8 +73,9 @@ export class OfficeAutomationController {
   }
 
   @Get('tasks')
-  listTasks(@Req() req: any, @Query('assigneeId') assigneeId?: string) {
-    const effectiveAssignee = req.user?.role === 'SUPERUSER' && assigneeId ? assigneeId : req.user.sub;
+  listTasks(@Req() req: any, @Query('assigneeId') assigneeId?: string, @Query('all') all?: string) {
+    const isPrivileged = req.user?.role === 'SUPERUSER' || req.user?.role === 'EDITOR';
+    const effectiveAssignee = isPrivileged && all === 'true' ? undefined : assigneeId && req.user?.role === 'SUPERUSER' ? assigneeId : req.user.sub;
     return this.office.listTasks(req.user.sub, effectiveAssignee);
   }
 
