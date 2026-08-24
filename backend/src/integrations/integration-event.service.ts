@@ -4,6 +4,14 @@ import { N8nService } from './n8n.service';
 
 type EventPayload = Record<string, unknown>;
 
+type TelegramRecipient = {
+  userId: string;
+  chatId: string;
+  username: string | null;
+  isVerified: boolean;
+  name: string | null;
+};
+
 @Injectable()
 export class IntegrationEventService {
   private readonly logger = new Logger(IntegrationEventService.name);
@@ -121,30 +129,65 @@ export class IntegrationEventService {
       payload.assigneeId,
       payload.approverId,
       payload.actorId,
-    ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+    ].filter(
+      (value): value is string => typeof value === 'string' && value.length > 0,
+    );
 
     const userIds = [...new Set(candidateIds)];
     if (userIds.length === 0) return payload;
 
-    const identities = await this.prisma.userTelegramIdentity.findMany({
-      where: { userId: { in: userIds } },
-      select: {
-        userId: true,
-        chatId: true,
-        username: true,
-        isVerified: true,
-      },
-    });
+    const [identities, users] = await Promise.all([
+      this.prisma.userTelegramIdentity.findMany({
+        where: { userId: { in: userIds } },
+        select: {
+          userId: true,
+          chatId: true,
+          username: true,
+          isVerified: true,
+        },
+      }),
+      this.prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, name: true },
+      }),
+    ]);
 
-    const telegramRecipients = identities.map((identity) => ({
+    const names = new Map(users.map((user) => [user.id, user.name]));
+    const telegramRecipients: TelegramRecipient[] = identities.map((identity) => ({
       userId: identity.userId,
       chatId: identity.chatId,
       username: identity.username,
       isVerified: identity.isVerified,
+      name: names.get(identity.userId) ?? null,
     }));
 
+    const recipientsByUserId = new Map(
+      telegramRecipients
+        .filter((recipient) => recipient.isVerified && recipient.chatId)
+        .map((recipient) => [recipient.userId, recipient]),
+    );
+
+    const recipient = (id: unknown) =>
+      typeof id === 'string' ? recipientsByUserId.get(id) : undefined;
+
+    const requester = recipient(payload.requesterId);
+    const approver = recipient(payload.approverId);
+    const actor = recipient(payload.actorId);
+    const assignee = recipient(payload.assigneeId);
+
+    // Keep the canonical camelCase payload while also providing the exact
+    // aliases consumed by the authoritative Office Automation n8n workflow.
     return {
       ...payload,
+      request_number: payload.requestNumber ?? null,
+      request_type: payload.requestType ?? payload.type ?? null,
+      requester_name: requester?.name ?? null,
+      requester_chat_id: requester?.chatId ?? null,
+      chat_id: requester?.chatId ?? actor?.chatId ?? assignee?.chatId ?? null,
+      approver_name: approver?.name ?? actor?.name ?? null,
+      approver_chat_id: approver?.chatId ?? null,
+      task_title: payload.taskTitle ?? payload.title ?? null,
+      due_date: payload.dueDate ?? payload.requiredDate ?? null,
       telegramRecipients,
     };
   }
