@@ -26,20 +26,17 @@ function removeMountedNav() {
 }
 
 function mountOfficeNav() {
-  const token = sessionStorage.getItem('expiry-tracker-token');
   const sidebar = document.querySelector<HTMLElement>('.premium-sidebar');
+  const account = sidebar?.querySelector<HTMLElement>('.sidebar-account');
 
-  if (!token || !sidebar) {
+  if (!sidebar) {
     removeMountedNav();
     return;
   }
 
-  // The MutationObserver below watches the dashboard sidebar because it is
-  // rendered after this bridge hydrates. Never rebuild an already-mounted nav;
-  // doing so would create a mutation loop.
   if (sidebar.querySelector('[data-dashboard-office-nav]')) return;
 
-  const role = decodeRole(token);
+  const role = decodeRole(sessionStorage.getItem('expiry-tracker-token'));
   const lang = localStorage.getItem('expiry-tracker-language') === 'id' ? 'id' : 'en';
   const links: OfficeLink[] = [
     { label: 'Dashboard', href: '/office', icon: '▦' },
@@ -88,7 +85,12 @@ function mountOfficeNav() {
   }
 
   wrapper.appendChild(nav);
-  sidebar.appendChild(wrapper);
+
+  // IMPORTANT: the dashboard sidebar uses .sidebar-account { margin-top:auto }.
+  // Appending after that element places the module navigation below the
+  // viewport. Insert it before the account block so it is actually visible.
+  if (account) sidebar.insertBefore(wrapper, account);
+  else sidebar.appendChild(wrapper);
 }
 
 export default function DashboardOfficeNavBridge() {
@@ -100,7 +102,12 @@ export default function DashboardOfficeNavBridge() {
       return;
     }
 
-    const sync = () => window.requestAnimationFrame(mountOfficeNav);
+    let frame = 0;
+    const sync = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(mountOfficeNav);
+    };
+
     sync();
 
     const observer = new MutationObserver(sync);
@@ -109,6 +116,7 @@ export default function DashboardOfficeNavBridge() {
     window.addEventListener('storage', sync);
 
     return () => {
+      cancelAnimationFrame(frame);
       observer.disconnect();
       window.removeEventListener('expiry-tracker-auth-change', sync);
       window.removeEventListener('storage', sync);
