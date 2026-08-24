@@ -179,7 +179,12 @@ export class OfficeAutomationService {
         const user = await tx.user.findUnique({ where: { id: actorId }, select: { role: true } });
         if (user?.role !== 'SUPERUSER') throw new ForbiddenException('Only the requester or superuser can cancel this request');
       }
-      if (![OfficeRequestStatus.PENDING, OfficeRequestStatus.APPROVED].includes(request.status)) return request;
+      if (
+        request.status !== OfficeRequestStatus.PENDING &&
+        request.status !== OfficeRequestStatus.APPROVED
+      ) {
+        return request;
+      }
 
       const updated = await tx.officeRequest.update({
         where: { id },
