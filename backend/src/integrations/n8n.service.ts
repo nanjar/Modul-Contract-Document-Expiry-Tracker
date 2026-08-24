@@ -20,13 +20,19 @@ export class N8nService {
       throw new Error('n8n webhook configuration is incomplete');
     }
 
+    // Send the secret in both the header and body. The repository's
+    // authoritative n8n workflow validates the body field, while the header
+    // keeps the transport compatible with integrations that validate headers.
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Contract-Tracker-Secret': webhookSecret,
       },
-      body: JSON.stringify(event),
+      body: JSON.stringify({
+        ...event,
+        secret: webhookSecret,
+      }),
     });
 
     if (!response.ok) {
