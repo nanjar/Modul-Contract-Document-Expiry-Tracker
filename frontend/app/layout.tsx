@@ -24,5 +24,5 @@ const disableLoginNativeValidation = `
 `;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="id"><body><LanguageProvider><WorkspaceChrome><DashboardOfficeNavBridge />{children}</WorkspaceChrome></LanguageProvider><script dangerouslySetInnerHTML={{ __html: disableLoginNativeValidation }} /></body></html>;
+  return <html lang="id"><body><LanguageProvider><DashboardOfficeNavBridge /><WorkspaceChrome>{children}</WorkspaceChrome></LanguageProvider><script dangerouslySetInnerHTML={{ __html: disableLoginNativeValidation }} /></body></html>;
 }
