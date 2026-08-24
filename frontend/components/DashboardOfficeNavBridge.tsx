@@ -25,6 +25,15 @@ function removeMountedNav() {
   document.querySelectorAll<HTMLElement>('[data-dashboard-office-nav]').forEach((node) => node.remove());
 }
 
+function alignDashboardBrand() {
+  const brand = document.querySelector<HTMLElement>('.premium-brand');
+  if (!brand) return;
+  const title = brand.querySelector<HTMLElement>('strong');
+  const subtitle = brand.querySelector<HTMLElement>('span');
+  if (title) title.textContent = 'Business Operations';
+  if (subtitle) subtitle.textContent = 'Platform';
+}
+
 function mountOfficeNav() {
   const sidebar = document.querySelector<HTMLElement>('.premium-sidebar');
   const account = sidebar?.querySelector<HTMLElement>('.sidebar-account');
@@ -33,6 +42,8 @@ function mountOfficeNav() {
     removeMountedNav();
     return;
   }
+
+  alignDashboardBrand();
 
   if (sidebar.querySelector('[data-dashboard-office-nav]')) return;
 
@@ -86,9 +97,8 @@ function mountOfficeNav() {
 
   wrapper.appendChild(nav);
 
-  // IMPORTANT: the dashboard sidebar uses .sidebar-account { margin-top:auto }.
-  // Appending after that element places the module navigation below the
-  // viewport. Insert it before the account block so it is actually visible.
+  // .sidebar-account has margin-top:auto. The module menu must be inserted
+  // before it; appending after it pushes the menu below the visible sidebar.
   if (account) sidebar.insertBefore(wrapper, account);
   else sidebar.appendChild(wrapper);
 }
