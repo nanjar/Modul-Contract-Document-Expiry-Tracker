@@ -18,17 +18,31 @@ import { DecideOfficeApprovalDto } from './dto/decide-office-approval.dto';
 import { UpdateOfficeRequestDto } from './dto/update-office-request.dto';
 import { UpdateOfficeTaskDto } from './dto/update-office-task.dto';
 import { OfficeAutomationService } from './office-automation.service';
+import { OfficeAutomationQueryService } from './office-automation-query.service';
 
 @ApiTags('office-automation')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('office-automation')
 export class OfficeAutomationController {
-  constructor(private readonly office: OfficeAutomationService) {}
+  constructor(
+    private readonly office: OfficeAutomationService,
+    private readonly queries: OfficeAutomationQueryService,
+  ) {}
 
   @Get('dashboard')
   dashboard(@Req() req: any) {
     return this.office.dashboard(req.user.sub);
+  }
+
+  @Get('reports')
+  reports(@Req() req: any) {
+    return this.queries.report(req.user.sub);
+  }
+
+  @Get('users')
+  users(@Req() req: any) {
+    return this.queries.usersForOffice(req.user.sub);
   }
 
   @Get('requests')
@@ -62,6 +76,11 @@ export class OfficeAutomationController {
   listTasks(@Req() req: any, @Query('assigneeId') assigneeId?: string) {
     const effectiveAssignee = req.user?.role === 'SUPERUSER' && assigneeId ? assigneeId : req.user.sub;
     return this.office.listTasks(req.user.sub, effectiveAssignee);
+  }
+
+  @Get('approvals')
+  listApprovals(@Req() req: any, @Query('all') all?: string) {
+    return this.queries.approvals(req.user.sub, all === 'true');
   }
 
   @Post('requests/:id/tasks')
