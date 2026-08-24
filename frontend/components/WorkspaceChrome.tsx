@@ -75,23 +75,17 @@ export default function WorkspaceChrome({ children }: Props) {
 
   useEffect(() => {
     const saved = localStorage.getItem('expiry-tracker-theme'); if (saved === 'light' || saved === 'dark') setTheme(saved);
-    const sessionUser = sessionUserFromToken(); setRole(sessionUser.role); setUserName(sessionUser.name); setOfficeAccess(sessionUser.role === 'SUPERUSER');
-    const syncAuth = async () => {
+    const sessionUser = sessionUserFromToken(); setRole(sessionUser.role); setUserName(sessionUser.name);
+    // Office Automation is a first-class workspace module. Its backend routes are
+    // authenticated for all workspace roles, so navigation must not depend on
+    // optional moduleAccess rows being present in the database.
+    setOfficeAccess(Boolean(sessionStorage.getItem('expiry-tracker-token')));
+    const syncAuth = () => {
       const next = sessionUserFromToken(); setRole(next.role); setUserName(next.name);
-      if (next.role === 'SUPERUSER') { setOfficeAccess(true); return; }
-      const token = sessionStorage.getItem('expiry-tracker-token');
-      if (!token) { setOfficeAccess(false); return; }
-      try {
-        const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
-        const response = await fetch(`${api}/auth/me`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
-        if (!response.ok) { setOfficeAccess(false); return; }
-        const user = await response.json();
-        const access = (user.moduleAccess ?? []) as ModuleAccess[];
-        setOfficeAccess(access.some(item => item.module === 'OFFICE_AUTOMATION' && item.permissions.includes('OFFICE_VIEW')));
-      } catch { setOfficeAccess(false); }
+      setOfficeAccess(Boolean(sessionStorage.getItem('expiry-tracker-token')));
     };
-    void syncAuth(); window.addEventListener('expiry-tracker-auth-change', () => void syncAuth());
-    return () => window.removeEventListener('expiry-tracker-auth-change', () => void syncAuth());
+    window.addEventListener('expiry-tracker-auth-change', syncAuth);
+    return () => window.removeEventListener('expiry-tracker-auth-change', syncAuth);
   }, []);
   useEffect(() => { document.documentElement.dataset.appTheme = theme; localStorage.setItem('expiry-tracker-theme', theme); }, [theme]);
   useEffect(() => {
