@@ -335,16 +335,67 @@ export class OfficeAutomationService {
 
   async dashboard(actorId: string) {
     await this.assertAccess(actorId, PERMISSIONS.VIEW);
-    const [pendingRequests, pendingApprovals, openTasks, overdueTasks, myRequests, myTasks] = await Promise.all([
+
+    const [
+      pendingRequests,
+      pendingApprovals,
+      openTasks,
+      overdueTasks,
+      myRequests,
+      myTasks,
+      totalRequests,
+      completedRequests,
+      integrationPending,
+      integrationProcessing,
+      integrationFailed,
+      integrationDelivered,
+      recentActivity,
+      recentIntegrations,
+    ] = await Promise.all([
       this.prisma.officeRequest.count({ where: { status: OfficeRequestStatus.PENDING } }),
       this.prisma.officeApproval.count({ where: { approverId: actorId, status: OfficeRequestStatus.PENDING } }),
       this.prisma.officeTask.count({ where: { status: { not: 'COMPLETED' } } }),
       this.prisma.officeTask.count({ where: { status: { not: 'COMPLETED' }, dueDate: { lt: new Date() } } }),
       this.prisma.officeRequest.count({ where: { requesterId: actorId, status: { in: [OfficeRequestStatus.PENDING, OfficeRequestStatus.APPROVED, OfficeRequestStatus.IN_PROGRESS] } } }),
       this.prisma.officeTask.count({ where: { assigneeId: actorId, status: { not: 'COMPLETED' } } }),
+      this.prisma.officeRequest.count(),
+      this.prisma.officeRequest.count({ where: { status: OfficeRequestStatus.COMPLETED } }),
+      this.prisma.integrationEvent.count({ where: { status: 'PENDING' } }),
+      this.prisma.integrationEvent.count({ where: { status: 'PROCESSING' } }),
+      this.prisma.integrationEvent.count({ where: { status: 'FAILED' } }),
+      this.prisma.integrationEvent.count({ where: { status: 'DELIVERED' } }),
+      this.prisma.officeActivityLog.findMany({
+        take: 8,
+        orderBy: { createdAt: 'desc' },
+        include: { request: { select: { id: true, requestNumber: true, title: true, status: true } } },
+      }),
+      this.prisma.integrationEvent.findMany({
+        take: 6,
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, event: true, status: true, attempts: true, lastError: true, createdAt: true, processedAt: true },
+      }),
     ]);
 
-    return { pendingRequests, pendingApprovals, openTasks, overdueTasks, myRequests, myTasks };
+    return {
+      pendingRequests,
+      pendingApprovals,
+      openTasks,
+      overdueTasks,
+      myRequests,
+      myTasks,
+      totalRequests,
+      completedRequests,
+      completionRate: totalRequests ? Math.round((completedRequests / totalRequests) * 100) : 0,
+      integration: {
+        pending: integrationPending,
+        processing: integrationProcessing,
+        failed: integrationFailed,
+        delivered: integrationDelivered,
+        healthy: integrationFailed === 0,
+      },
+      recentActivity,
+      recentIntegrations,
+    };
   }
 
   private async assertAccess(userId: string, permission: string) {
