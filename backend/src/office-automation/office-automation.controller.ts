@@ -79,6 +79,11 @@ export class OfficeAutomationController {
     return this.office.listTasks(req.user.sub, effectiveAssignee);
   }
 
+  @Get('tasks/:id')
+  task(@Param('id') id: string, @Req() req: any) {
+    return this.queries.task(id, req.user.sub);
+  }
+
   @Get('approvals')
   listApprovals(@Req() req: any, @Query('all') all?: string) {
     return this.queries.approvals(req.user.sub, all === 'true');
