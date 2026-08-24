@@ -6,7 +6,7 @@ Base URL: `/api/v1`
 
 - `POST /auth/login`
 - `POST /auth/logout`
-- `GET /auth/me`
+- `GET /auth/me` — includes the authenticated user's module access.
 
 ## Users / employees / module access
 
@@ -31,15 +31,20 @@ Existing document, file, reminder, dashboard and audit APIs remain active.
 ## Office Automation
 
 - `GET /office-automation/dashboard`
-- `GET /office-automation/requests`
+- `GET /office-automation/reports`
+- `GET /office-automation/users`
+- `GET /office-automation/requests?all=true`
 - `POST /office-automation/requests`
 - `GET /office-automation/requests/:id`
 - `PATCH /office-automation/requests/:id`
 - `POST /office-automation/requests/:id/cancel`
-- `GET /office-automation/tasks`
+- `GET /office-automation/tasks?all=true`
 - `PATCH /office-automation/tasks/:id`
 - `POST /office-automation/requests/:id/tasks`
+- `GET /office-automation/approvals?all=true`
 - `POST /office-automation/requests/:id/approvals`
 - `POST /office-automation/approvals/:id/decision`
+
+`all=true` is honored only for privileged Office users; regular users are automatically scoped to their own requests/tasks/assigned approvals.
 
 All protected endpoints require JWT authentication. User administration and Telegram identity management require SUPERUSER. Office endpoints enforce `OFFICE_AUTOMATION` module permissions server-side.
