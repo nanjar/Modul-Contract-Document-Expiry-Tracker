@@ -53,7 +53,7 @@ export class IntegrationEventService {
         if (claimed.count !== 1) continue;
 
         try {
-          const payload = await this.enrichPayload(event.payload);
+          const payload = await this.enrichPayload(event.payload, event.event);
 
           await this.n8n.dispatch({
             event: event.event,
@@ -119,22 +119,76 @@ export class IntegrationEventService {
     }
   }
 
-  private async enrichPayload(raw: unknown): Promise<unknown> {
+  private async enrichPayload(raw: unknown, eventType: string): Promise<unknown> {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
 
     const payload = raw as EventPayload;
+    let enriched: EventPayload = { ...payload };
+
+    // Approval decision and task events carry only an entity/request id. Load
+    // the related business data here so the n8n workflow receives a complete
+    // notification payload instead of having to query the application DB.
+    const requestId = typeof payload.requestId === 'string' ? payload.requestId : null;
+    const taskId = typeof payload.taskId === 'string' ? payload.taskId : null;
+
+    if (requestId) {
+      const request = await this.prisma.officeRequest.findUnique({
+        where: { id: requestId },
+        select: {
+          requestNumber: true,
+          type: true,
+          title: true,
+          status: true,
+          requesterId: true,
+        },
+      });
+
+      if (request) {
+        enriched = {
+          ...enriched,
+          requestNumber: enriched.requestNumber ?? request.requestNumber,
+          type: enriched.type ?? request.type,
+          title: enriched.title ?? request.title,
+          status: enriched.status ?? request.status,
+          requesterId: enriched.requesterId ?? request.requesterId,
+        };
+      }
+    }
+
+    if (taskId) {
+      const task = await this.prisma.officeTask.findUnique({
+        where: { id: taskId },
+        select: {
+          title: true,
+          dueDate: true,
+          assigneeId: true,
+          requestId: true,
+        },
+      });
+
+      if (task) {
+        enriched = {
+          ...enriched,
+          taskTitle: enriched.taskTitle ?? task.title,
+          dueDate: enriched.dueDate ?? task.dueDate,
+          assigneeId: enriched.assigneeId ?? task.assigneeId,
+          requestId: enriched.requestId ?? task.requestId,
+        };
+      }
+    }
+
     const candidateIds = [
-      payload.userId,
-      payload.requesterId,
-      payload.assigneeId,
-      payload.approverId,
-      payload.actorId,
+      enriched.userId,
+      enriched.requesterId,
+      enriched.assigneeId,
+      enriched.approverId,
+      enriched.actorId,
     ].filter(
       (value): value is string => typeof value === 'string' && value.length > 0,
     );
 
     const userIds = [...new Set(candidateIds)];
-    if (userIds.length === 0) return payload;
+    if (userIds.length === 0) return enriched;
 
     const [identities, users] = await Promise.all([
       this.prisma.userTelegramIdentity.findMany({
@@ -170,25 +224,24 @@ export class IntegrationEventService {
     const recipient = (id: unknown) =>
       typeof id === 'string' ? recipientsByUserId.get(id) : undefined;
 
-    const requester = recipient(payload.requesterId);
-    const approver = recipient(payload.approverId);
-    const actor = recipient(payload.actorId);
-    const assignee = recipient(payload.assigneeId);
+    const requester = recipient(enriched.requesterId);
+    const approver = recipient(enriched.approverId);
+    const actor = recipient(enriched.actorId);
+    const assignee = recipient(enriched.assigneeId);
 
-    // Keep the canonical camelCase payload while also providing the exact
-    // aliases consumed by the authoritative Office Automation n8n workflow.
     return {
-      ...payload,
-      request_number: payload.requestNumber ?? null,
-      request_type: payload.requestType ?? payload.type ?? null,
+      ...enriched,
+      request_number: enriched.requestNumber ?? null,
+      request_type: enriched.requestType ?? enriched.type ?? null,
       requester_name: requester?.name ?? null,
       requester_chat_id: requester?.chatId ?? null,
       chat_id: requester?.chatId ?? actor?.chatId ?? assignee?.chatId ?? null,
       approver_name: approver?.name ?? actor?.name ?? null,
       approver_chat_id: approver?.chatId ?? null,
-      task_title: payload.taskTitle ?? payload.title ?? null,
-      due_date: payload.dueDate ?? payload.requiredDate ?? null,
+      task_title: enriched.taskTitle ?? enriched.title ?? null,
+      due_date: enriched.dueDate ?? enriched.requiredDate ?? null,
       telegramRecipients,
+      integration_event_type: eventType,
     };
   }
 }
