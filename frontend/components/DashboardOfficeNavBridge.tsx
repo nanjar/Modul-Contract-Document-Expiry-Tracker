@@ -26,17 +26,24 @@ function removeMountedNav() {
 }
 
 function mountOfficeNav() {
-  removeMountedNav();
-
   const token = sessionStorage.getItem('expiry-tracker-token');
   const sidebar = document.querySelector<HTMLElement>('.premium-sidebar');
-  if (!token || !sidebar) return;
+
+  if (!token || !sidebar) {
+    removeMountedNav();
+    return;
+  }
+
+  // The MutationObserver below watches the dashboard sidebar because it is
+  // rendered after this bridge hydrates. Never rebuild an already-mounted nav;
+  // doing so would create a mutation loop.
+  if (sidebar.querySelector('[data-dashboard-office-nav]')) return;
 
   const role = decodeRole(token);
   const lang = localStorage.getItem('expiry-tracker-language') === 'id' ? 'id' : 'en';
   const links: OfficeLink[] = [
-    { label: lang === 'id' ? 'Dashboard' : 'Dashboard', href: '/office', icon: '▦' },
-    { label: role === 'SUPERUSER' || role === 'EDITOR' ? (lang === 'id' ? 'Requests' : 'Requests') : (lang === 'id' ? 'Request Saya' : 'My Requests'), href: '/office/requests', icon: '◫' },
+    { label: 'Dashboard', href: '/office', icon: '▦' },
+    { label: role === 'SUPERUSER' || role === 'EDITOR' ? 'Requests' : (lang === 'id' ? 'Request Saya' : 'My Requests'), href: '/office/requests', icon: '◫' },
     { label: lang === 'id' ? 'Task' : 'Tasks', href: '/office/tasks', icon: '✓' },
     { label: lang === 'id' ? 'Approval' : 'Approvals', href: '/office/approvals', icon: '◉' },
     { label: lang === 'id' ? 'Laporan' : 'Reports', href: '/office/reports', icon: '▥' },
@@ -45,12 +52,7 @@ function mountOfficeNav() {
   const wrapper = document.createElement('section');
   wrapper.dataset.dashboardOfficeNav = 'true';
   wrapper.setAttribute('aria-label', 'Office Automation');
-  wrapper.style.cssText = [
-    'margin-top:22px',
-    'padding-top:18px',
-    'border-top:1px solid rgba(255,255,255,.08)',
-    'flex:none',
-  ].join(';');
+  wrapper.style.cssText = 'margin-top:22px;padding-top:18px;border-top:1px solid rgba(255,255,255,.08);flex:none';
 
   const label = document.createElement('div');
   label.textContent = 'OFFICE AUTOMATION';
