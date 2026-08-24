@@ -1,5 +1,5 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
-import { ModuleKey, OfficeRequestStatus } from '@prisma/client';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ModuleKey } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 
@@ -28,6 +28,23 @@ export class OfficeAutomationQueryService {
     });
   }
 
+  async task(id: string, actorId: string) {
+    await this.users.assertModuleAccess(actorId, OFFICE, VIEW);
+    const task = await this.prisma.officeTask.findUnique({
+      where: { id },
+      include: {
+        request: { select: { id: true, requestNumber: true, title: true, type: true, priority: true, status: true } },
+        assignee: { select: { id: true, name: true, email: true, role: true } },
+      },
+    });
+    if (!task) throw new NotFoundException('Office task not found');
+    const user = await this.prisma.user.findUnique({ where: { id: actorId }, select: { role: true } });
+    if (user?.role !== 'SUPERUSER' && user?.role !== 'EDITOR' && task.assigneeId !== actorId) {
+      throw new ForbiddenException('You can only view your own office tasks');
+    }
+    return task;
+  }
+
   async usersForOffice(actorId: string) {
     await this.users.assertModuleAccess(actorId, OFFICE, VIEW);
     return this.prisma.user.findMany({
@@ -49,8 +66,8 @@ export class OfficeAutomationQueryService {
     const userIds = activeUsers.map((item) => item.assigneeId).filter((id): id is string => Boolean(id));
     const users = userIds.length ? await this.prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, email: true } }) : [];
     const userMap = new Map(users.map((user) => [user.id, user]));
-
     const countBy = (items: Array<{ status: string; _count: { _all: number } }>) => Object.fromEntries(items.map((item) => [item.status, item._count._all]));
+
     return {
       requests: countBy(requests),
       tasks: countBy(tasks),
