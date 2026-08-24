@@ -1,139 +1,118 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
-import Link from 'next/link';
+import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
 type Role = 'SUPERUSER' | 'EDITOR' | 'VIEWER';
 
+type OfficeLink = {
+  label: string;
+  href: string;
+  icon: string;
+};
+
+function decodeRole(token: string | null): Role {
+  try {
+    if (!token) return 'VIEWER';
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return (payload.role ?? 'VIEWER') as Role;
+  } catch {
+    return 'VIEWER';
+  }
+}
+
+function removeMountedNav() {
+  document.querySelectorAll<HTMLElement>('[data-dashboard-office-nav]').forEach((node) => node.remove());
+}
+
+function mountOfficeNav() {
+  removeMountedNav();
+
+  const token = sessionStorage.getItem('expiry-tracker-token');
+  const sidebar = document.querySelector<HTMLElement>('.premium-sidebar');
+  if (!token || !sidebar) return;
+
+  const role = decodeRole(token);
+  const lang = localStorage.getItem('expiry-tracker-language') === 'id' ? 'id' : 'en';
+  const links: OfficeLink[] = [
+    { label: lang === 'id' ? 'Dashboard' : 'Dashboard', href: '/office', icon: '▦' },
+    { label: role === 'SUPERUSER' || role === 'EDITOR' ? (lang === 'id' ? 'Requests' : 'Requests') : (lang === 'id' ? 'Request Saya' : 'My Requests'), href: '/office/requests', icon: '◫' },
+    { label: lang === 'id' ? 'Task' : 'Tasks', href: '/office/tasks', icon: '✓' },
+    { label: lang === 'id' ? 'Approval' : 'Approvals', href: '/office/approvals', icon: '◉' },
+    { label: lang === 'id' ? 'Laporan' : 'Reports', href: '/office/reports', icon: '▥' },
+  ];
+
+  const wrapper = document.createElement('section');
+  wrapper.dataset.dashboardOfficeNav = 'true';
+  wrapper.setAttribute('aria-label', 'Office Automation');
+  wrapper.style.cssText = [
+    'margin-top:22px',
+    'padding-top:18px',
+    'border-top:1px solid rgba(255,255,255,.08)',
+    'flex:none',
+  ].join(';');
+
+  const label = document.createElement('div');
+  label.textContent = 'OFFICE AUTOMATION';
+  label.style.cssText = 'padding:0 12px 9px;color:#6f7d92;font-size:9px;font-weight:800;letter-spacing:.13em;line-height:1.2';
+  wrapper.appendChild(label);
+
+  const nav = document.createElement('nav');
+  nav.style.cssText = 'display:grid;gap:4px';
+
+  for (const item of links) {
+    const anchor = document.createElement('a');
+    anchor.href = item.href;
+    anchor.style.cssText = 'height:42px;padding:0 12px;display:flex;align-items:center;gap:12px;border-radius:9px;color:#a6b1c1;text-decoration:none;font-size:12px;font-weight:650;box-sizing:border-box;transition:background .15s,color .15s';
+    anchor.addEventListener('mouseenter', () => {
+      anchor.style.background = 'rgba(255,255,255,.06)';
+      anchor.style.color = '#fff';
+    });
+    anchor.addEventListener('mouseleave', () => {
+      anchor.style.background = 'transparent';
+      anchor.style.color = '#a6b1c1';
+    });
+
+    const icon = document.createElement('span');
+    icon.textContent = item.icon;
+    icon.style.cssText = 'width:18px;text-align:center;color:#93a2bb;font-size:15px;line-height:1;flex:none';
+
+    const text = document.createElement('span');
+    text.textContent = item.label;
+    text.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+
+    anchor.append(icon, text);
+    nav.appendChild(anchor);
+  }
+
+  wrapper.appendChild(nav);
+  sidebar.appendChild(wrapper);
+}
+
 export default function DashboardOfficeNavBridge() {
   const pathname = usePathname();
-  const [container, setContainer] = useState<HTMLElement | null>(null);
-  const [authenticated, setAuthenticated] = useState(false);
-  const [role, setRole] = useState<Role>('VIEWER');
 
   useEffect(() => {
     if (pathname !== '/') {
-      setContainer(null);
+      removeMountedNav();
       return;
     }
 
-    const findSidebar = () => {
-      const sidebar = document.querySelector<HTMLElement>('.premium-sidebar');
-      // Use body as a temporary fallback so the module cannot silently disappear
-      // when the dashboard sidebar is rendered after this component hydrates.
-      setContainer(sidebar ?? document.body);
-    };
+    const sync = () => window.requestAnimationFrame(mountOfficeNav);
+    sync();
 
-    findSidebar();
-    const observer = new MutationObserver(findSidebar);
+    const observer = new MutationObserver(sync);
     observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, [pathname]);
+    window.addEventListener('expiry-tracker-auth-change', sync);
+    window.addEventListener('storage', sync);
 
-  useEffect(() => {
-    if (pathname !== '/') return;
-
-    const syncAuth = () => {
-      const raw = sessionStorage.getItem('expiry-tracker-token');
-      if (!raw) {
-        setAuthenticated(false);
-        setRole('VIEWER');
-        return;
-      }
-
-      try {
-        const payload = JSON.parse(atob(raw.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-        setRole((payload.role ?? 'VIEWER') as Role);
-        setAuthenticated(true);
-      } catch {
-        setAuthenticated(false);
-        setRole('VIEWER');
-      }
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('expiry-tracker-auth-change', sync);
+      window.removeEventListener('storage', sync);
+      removeMountedNav();
     };
-
-    syncAuth();
-    window.addEventListener('expiry-tracker-auth-change', syncAuth);
-    return () => window.removeEventListener('expiry-tracker-auth-change', syncAuth);
   }, [pathname]);
 
-  if (pathname !== '/' || !container || !authenticated) return null;
-
-  const fallback = container === document.body;
-
-  return createPortal(
-    <div className={`dashboard-office-bridge${fallback ? ' dashboard-office-bridge-fallback' : ''}`}>
-      <div className="dashboard-office-label">OFFICE AUTOMATION</div>
-      <nav>
-        <Link href="/office"><span>▦</span><strong>Dashboard</strong></Link>
-        <Link href="/office/requests"><span>◫</span><strong>{role === 'SUPERUSER' || role === 'EDITOR' ? 'Requests' : 'My Requests'}</strong></Link>
-        <Link href="/office/tasks"><span>✓</span><strong>Tasks</strong></Link>
-        <Link href="/office/approvals"><span>◉</span><strong>Approvals</strong></Link>
-        <Link href="/office/reports"><span>▥</span><strong>Reports</strong></Link>
-      </nav>
-      <style>{`
-        .dashboard-office-bridge {
-          order: 2;
-          margin-top: 22px;
-          padding-top: 18px;
-          border-top: 1px solid rgba(255,255,255,.08);
-        }
-        .dashboard-office-bridge-fallback {
-          position: fixed;
-          left: 12px;
-          top: 180px;
-          width: 226px;
-          z-index: 10000;
-          margin: 0;
-          padding: 14px 8px 10px;
-          border: 1px solid rgba(255,255,255,.10);
-          border-radius: 12px;
-          background: #0b1119;
-          box-shadow: 0 18px 45px rgba(0,0,0,.35);
-        }
-        .dashboard-office-label {
-          padding: 0 12px 9px;
-          color: #6f7d92;
-          font-size: 9px;
-          font-weight: 800;
-          letter-spacing: .13em;
-        }
-        .dashboard-office-bridge nav {
-          display: grid;
-          gap: 4px;
-        }
-        .dashboard-office-bridge a {
-          height: 38px;
-          padding: 0 12px;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          border-radius: 9px;
-          color: #a6b1c1;
-          text-decoration: none;
-          font-size: 11px;
-          font-weight: 650;
-        }
-        .dashboard-office-bridge a:hover {
-          background: rgba(255,255,255,.06);
-          color: #fff;
-        }
-        .dashboard-office-bridge a span {
-          width: 18px;
-          text-align: center;
-          color: #93a2bb;
-          font-size: 15px;
-        }
-        .dashboard-office-bridge a strong { font-weight: 650; }
-        .premium-sidebar .admin-label { order: 3; }
-        .premium-sidebar .admin-label + nav { order: 3; }
-        .premium-sidebar .sidebar-account { order: 4; }
-        @media(max-width:760px) {
-          .dashboard-office-bridge { display: none; }
-        }
-      `}</style>
-    </div>,
-    container,
-  );
+  return null;
 }
