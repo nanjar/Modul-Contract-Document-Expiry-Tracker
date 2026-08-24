@@ -39,6 +39,7 @@ Existing document, file, reminder, dashboard and audit APIs remain active.
 - `PATCH /office-automation/requests/:id`
 - `POST /office-automation/requests/:id/cancel`
 - `GET /office-automation/tasks?all=true`
+- `GET /office-automation/tasks/:id`
 - `PATCH /office-automation/tasks/:id`
 - `POST /office-automation/requests/:id/tasks`
 - `GET /office-automation/approvals?all=true`
