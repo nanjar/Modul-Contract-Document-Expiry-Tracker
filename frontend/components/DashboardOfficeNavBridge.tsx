@@ -21,7 +21,9 @@ export default function DashboardOfficeNavBridge() {
 
     const findSidebar = () => {
       const sidebar = document.querySelector<HTMLElement>('.premium-sidebar');
-      setContainer(sidebar);
+      // Use body as a temporary fallback so the module cannot silently disappear
+      // when the dashboard sidebar is rendered after this component hydrates.
+      setContainer(sidebar ?? document.body);
     };
 
     findSidebar();
@@ -58,8 +60,10 @@ export default function DashboardOfficeNavBridge() {
 
   if (pathname !== '/' || !container || !authenticated) return null;
 
+  const fallback = container === document.body;
+
   return createPortal(
-    <div className="dashboard-office-bridge">
+    <div className={`dashboard-office-bridge${fallback ? ' dashboard-office-bridge-fallback' : ''}`}>
       <div className="dashboard-office-label">OFFICE AUTOMATION</div>
       <nav>
         <Link href="/office"><span>▦</span><strong>Dashboard</strong></Link>
@@ -74,6 +78,19 @@ export default function DashboardOfficeNavBridge() {
           margin-top: 22px;
           padding-top: 18px;
           border-top: 1px solid rgba(255,255,255,.08);
+        }
+        .dashboard-office-bridge-fallback {
+          position: fixed;
+          left: 12px;
+          top: 180px;
+          width: 226px;
+          z-index: 10000;
+          margin: 0;
+          padding: 14px 8px 10px;
+          border: 1px solid rgba(255,255,255,.10);
+          border-radius: 12px;
+          background: #0b1119;
+          box-shadow: 0 18px 45px rgba(0,0,0,.35);
         }
         .dashboard-office-label {
           padding: 0 12px 9px;
