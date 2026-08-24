@@ -4,10 +4,11 @@ import './premium-login.css';
 import '../components/workspace-chrome.css';
 import WorkspaceChrome from '../components/WorkspaceChrome';
 import { LanguageProvider } from '../components/LanguageProvider';
+import DashboardOfficeNavBridge from '../components/DashboardOfficeNavBridge';
 
 export const metadata: Metadata = {
-  title: 'Expiry Tracker',
-  description: 'Contract & Document Expiry Tracker',
+  title: 'Business Operations Platform',
+  description: 'Premium single-tenant business operations platform',
 };
 
 const disableLoginNativeValidation = `
@@ -23,5 +24,5 @@ const disableLoginNativeValidation = `
 `;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="id"><body><LanguageProvider><WorkspaceChrome>{children}</WorkspaceChrome></LanguageProvider><script dangerouslySetInnerHTML={{ __html: disableLoginNativeValidation }} /></body></html>;
+  return <html lang="id"><body><LanguageProvider><WorkspaceChrome><DashboardOfficeNavBridge />{children}</WorkspaceChrome></LanguageProvider><script dangerouslySetInnerHTML={{ __html: disableLoginNativeValidation }} /></body></html>;
 }
