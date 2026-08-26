@@ -7,15 +7,70 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role { SUPERUSER EDITOR VIEWER }
-enum ModuleKey { CONTRACT_DOCUMENT OFFICE_AUTOMATION }
-enum OfficeRequestStatus { PENDING APPROVED REJECTED CANCELLED IN_PROGRESS COMPLETED }
-enum OfficeRequestType { LEAVE ATTENDANCE GENERAL LATE WFH OVERTIME REIMBURSEMENT BUSINESS_TRIP MEETING }
-enum IntegrationEventStatus { PENDING PROCESSING DELIVERED FAILED }
-enum AttendanceStatus { PRESENT LATE ABSENT LEAVE WFH OFF }
-enum AttendanceAction { CHECK_IN CHECK_OUT }
-enum AnnouncementStatus { DRAFT PUBLISHED ARCHIVED }
-enum AnnouncementRecipientType { ALL ROLE USER }
+enum Role {
+  SUPERUSER
+  EDITOR
+  VIEWER
+}
+
+enum ModuleKey {
+  CONTRACT_DOCUMENT
+  OFFICE_AUTOMATION
+}
+
+enum OfficeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum OfficeRequestType {
+  LEAVE
+  ATTENDANCE
+  GENERAL
+  LATE
+  WFH
+  OVERTIME
+  REIMBURSEMENT
+  BUSINESS_TRIP
+  MEETING
+}
+
+enum IntegrationEventStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  FAILED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  LEAVE
+  WFH
+  OFF
+}
+
+enum AttendanceAction {
+  CHECK_IN
+  CHECK_OUT
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AnnouncementRecipientType {
+  ALL
+  ROLE
+  USER
+}
 
 model User {
   id           String   @id @default(uuid()) @db.Uuid
