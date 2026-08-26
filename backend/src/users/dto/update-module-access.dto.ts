@@ -1,5 +1,6 @@
-import { ArrayUnique, IsArray, IsEnum, IsString } from 'class-validator';
+import { ArrayUnique, IsArray, IsEnum, IsIn, IsString } from 'class-validator';
 import { ModuleKey } from '@prisma/client';
+import { ALL_MODULE_PERMISSIONS } from '../../rbac/permissions';
 
 export class UpdateModuleAccessDto {
   @IsEnum(ModuleKey)
@@ -8,5 +9,6 @@ export class UpdateModuleAccessDto {
   @IsArray()
   @ArrayUnique()
   @IsString({ each: true })
+  @IsIn(ALL_MODULE_PERMISSIONS as readonly string[], { each: true })
   permissions!: string[];
 }
