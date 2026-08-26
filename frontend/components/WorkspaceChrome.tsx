@@ -9,7 +9,8 @@ import DashboardProfileBridge from './DashboardProfileBridge';
 type Role = 'SUPERUSER' | 'EDITOR' | 'VIEWER';
 type Props = { children: ReactNode };
 type SessionUser = { id?: string; name: string; role: Role; email?: string };
-type ModuleAccess = { module: 'CONTRACT_DOCUMENT' | 'OFFICE_AUTOMATION'; permissions: string[] };
+type ModuleKey = 'CONTRACT_DOCUMENT' | 'OFFICE_AUTOMATION';
+type ModuleAccess = { module: ModuleKey; permissions: string[] };
 type ProfileMenuSource = 'sidebar' | 'topbar';
 
 const nav = [
@@ -69,25 +70,51 @@ function Brand() { return <span className="chrome-brand-icon"><svg viewBox="0 0 
 export default function WorkspaceChrome({ children }: Props) {
   const pathname = usePathname(); const router = useRouter(); const { lang, setLang } = useLanguage();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark'); const [role, setRole] = useState<Role>('VIEWER');
-  const [userName, setUserName] = useState('User'); const [query, setQuery] = useState(''); const [archiveActive, setArchiveActive] = useState(false); const [officeAccess, setOfficeAccess] = useState(false);
+  const [userName, setUserName] = useState('User'); const [query, setQuery] = useState(''); const [archiveActive, setArchiveActive] = useState(false);
+  const [documentsAccess, setDocumentsAccess] = useState(false); const [officeAccess, setOfficeAccess] = useState(false); const [accessLoaded, setAccessLoaded] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false); const [profileMenuSource, setProfileMenuSource] = useState<ProfileMenuSource>('topbar');
   const t = (key: Key) => copy[lang][key];
 
   useEffect(() => {
     const saved = localStorage.getItem('expiry-tracker-theme'); if (saved === 'light' || saved === 'dark') setTheme(saved);
     const sessionUser = sessionUserFromToken(); setRole(sessionUser.role); setUserName(sessionUser.name);
-    // Office Automation is a first-class workspace module. Its backend routes are
-    // authenticated for all workspace roles, so navigation must not depend on
-    // optional moduleAccess rows being present in the database.
-    setOfficeAccess(Boolean(sessionStorage.getItem('expiry-tracker-token')));
+    const token = sessionStorage.getItem('expiry-tracker-token');
+    if (!token) { setDocumentsAccess(false); setOfficeAccess(false); setAccessLoaded(true); return; }
+
+    const loadAccess = async () => {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1'}/auth/me`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+        if (!response.ok) throw new Error('auth');
+        const user = await response.json();
+        const access: ModuleAccess[] = user.moduleAccess ?? [];
+        const superuser = user.role === 'SUPERUSER';
+        setDocumentsAccess(superuser || access.some((item) => item.module === 'CONTRACT_DOCUMENT' && item.permissions.includes('DOCUMENT_VIEW')));
+        setOfficeAccess(superuser || access.some((item) => item.module === 'OFFICE_AUTOMATION' && item.permissions.includes('OFFICE_DASHBOARD_VIEW')));
+        setRole(user.role ?? sessionUser.role); setUserName(user.name ?? sessionUser.name);
+      } catch {
+        setDocumentsAccess(false); setOfficeAccess(false);
+      } finally { setAccessLoaded(true); }
+    };
+    void loadAccess();
+
     const syncAuth = () => {
-      const next = sessionUserFromToken(); setRole(next.role); setUserName(next.name);
-      setOfficeAccess(Boolean(sessionStorage.getItem('expiry-tracker-token')));
+      const next = sessionUserFromToken(); setRole(next.role); setUserName(next.name); setAccessLoaded(false);
+      const currentToken = sessionStorage.getItem('expiry-tracker-token');
+      if (!currentToken) { setDocumentsAccess(false); setOfficeAccess(false); setAccessLoaded(true); return; }
+      void loadAccess();
     };
     window.addEventListener('expiry-tracker-auth-change', syncAuth);
     return () => window.removeEventListener('expiry-tracker-auth-change', syncAuth);
   }, []);
+
   useEffect(() => { document.documentElement.dataset.appTheme = theme; localStorage.setItem('expiry-tracker-theme', theme); }, [theme]);
+  useEffect(() => {
+    if (!accessLoaded || pathname === '/') return;
+    const documentRoute = pathname === '/documents' || pathname === '/reminders';
+    const officeRoute = pathname.startsWith('/office');
+    if (documentRoute && !documentsAccess) router.replace('/');
+    else if (officeRoute && !officeAccess) router.replace('/');
+  }, [accessLoaded, documentsAccess, officeAccess, pathname, router]);
   useEffect(() => {
     if (pathname !== '/documents') { setQuery(''); setArchiveActive(false); return; }
     const params = new URLSearchParams(window.location.search); setQuery(params.get('search') ?? ''); setArchiveActive(params.get('status') === 'ARCHIVED');
@@ -130,7 +157,7 @@ export default function WorkspaceChrome({ children }: Props) {
     <aside className="chrome-sidebar">
       <div className="chrome-brand"><Brand /><span>Business Operations</span></div>
       <div className="chrome-section-label">{lang === 'id' ? 'UMUM' : 'GENERAL'}</div>
-      <nav className="chrome-nav">{nav.map(([key, href, icon]) => <Link key={href} href={href} onClick={navigate} className={`chrome-nav-item ${active(href) ? 'active' : ''}`}><Icon name={icon} /><span>{t(key)}</span></Link>)}</nav>
+      <nav className="chrome-nav">{nav.filter(([key]) => key === 'overview' || (key === 'audit' ? role === 'SUPERUSER' : documentsAccess)).map(([key, href, icon]) => <Link key={href} href={href} onClick={navigate} className={`chrome-nav-item ${active(href) ? 'active' : ''}`}><Icon name={icon} /><span>{t(key)}</span></Link>)}</nav>
       {officeAccess && <><div className="chrome-section-label admin">{t('officeAutomation')}</div><nav className="chrome-nav">{officeNav.map(([key, href, icon]) => <Link key={href} href={href} onClick={navigate} className={`chrome-nav-item ${active(href) ? 'active' : ''}`}><Icon name={icon} /><span>{t(key)}</span></Link>)}</nav></>}
       {role === 'SUPERUSER' && <><div className="chrome-section-label admin">{lang === 'id' ? 'ADMINISTRASI' : 'ADMINISTRATION'}</div><nav className="chrome-nav"><Link href="/users" onClick={navigate} className={`chrome-nav-item ${active('/users') ? 'active' : ''}`}><Icon name="users" /><span>{t('users')}</span></Link><Link href="/settings" onClick={navigate} className={`chrome-nav-item ${active('/settings') ? 'active' : ''}`}><Icon name="settings" /><span>{t('settings')}</span></Link></nav></>}
       <div className="chrome-user"><button type="button" className="chrome-profile chrome-sidebar-profile" data-profile-control onPointerDown={event => event.stopPropagation()} onClick={event => { event.preventDefault(); event.stopPropagation(); openProfile('sidebar'); }} aria-haspopup="menu" aria-expanded={profileOpen && profileMenuSource === 'sidebar'}><div className="chrome-avatar">{initials}</div><div className="chrome-user-meta"><strong>{userName}</strong><span>{role}</span></div><span>⌄</span></button></div>
