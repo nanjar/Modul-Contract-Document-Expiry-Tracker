@@ -46,7 +46,7 @@ jobs:
       - run: pnpm exec prisma validate
       - run: pnpm exec prisma generate
       - run: pnpm exec prisma migrate deploy
-      - run: pnpm test -- --runInBand
+      - run: pnpm test --runInBand
       - run: pnpm build
 
   frontend:
