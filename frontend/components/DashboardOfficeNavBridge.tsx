@@ -4,12 +4,16 @@ import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
 type Role = 'SUPERUSER' | 'EDITOR' | 'VIEWER';
+type ModuleKey = 'CONTRACT_DOCUMENT' | 'OFFICE_AUTOMATION';
+type ModuleAccess = { module: ModuleKey; permissions: string[] };
 
 type OfficeLink = {
   label: string;
   href: string;
   icon: string;
 };
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
 
 function decodeRole(token: string | null): Role {
   try {
@@ -25,32 +29,47 @@ function removeMountedNav() {
   document.querySelectorAll<HTMLElement>('[data-dashboard-office-nav]').forEach((node) => node.remove());
 }
 
-function alignDashboardBrand() {
-  const brand = document.querySelector<HTMLElement>('.premium-brand');
-  if (!brand) return;
-  const title = brand.querySelector<HTMLElement>('strong');
-  const subtitle = brand.querySelector<HTMLElement>('span');
-  if (title) title.textContent = 'Business Operations';
-  if (subtitle) subtitle.textContent = 'Platform';
+function hasOfficeDashboardAccess(moduleAccess: ModuleAccess[], role: Role) {
+  return role === 'SUPERUSER' || moduleAccess.some(
+    (item) => item.module === 'OFFICE_AUTOMATION' && item.permissions.includes('OFFICE_DASHBOARD_VIEW'),
+  );
 }
 
-function mountOfficeNav() {
-  const sidebar = document.querySelector<HTMLElement>('.premium-sidebar');
-  const account = sidebar?.querySelector<HTMLElement>('.sidebar-account');
+async function readOfficeAccess() {
+  const token = sessionStorage.getItem('expiry-tracker-token');
+  if (!token) return false;
 
-  if (!sidebar) {
+  try {
+    const response = await fetch(`${API_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) return false;
+
+    const user = await response.json();
+    return hasOfficeDashboardAccess(user.moduleAccess ?? [], user.role ?? decodeRole(token));
+  } catch {
+    return false;
+  }
+}
+
+function mountOfficeNav(allowed: boolean) {
+  const sidebar = document.querySelector<HTMLElement>('.app .sidebar');
+
+  if (!sidebar || !allowed) {
     removeMountedNav();
     return;
   }
 
-  alignDashboardBrand();
-
-  if (sidebar.querySelector('[data-dashboard-office-nav]')) return;
+  const account = sidebar.querySelector<HTMLElement>('.sidebar-account');
+  const existing = sidebar.querySelector<HTMLElement>('[data-dashboard-office-nav]');
+  if (existing) return;
 
   const role = decodeRole(sessionStorage.getItem('expiry-tracker-token'));
   const lang = localStorage.getItem('expiry-tracker-language') === 'id' ? 'id' : 'en';
   const links: OfficeLink[] = [
-    { label: 'Dashboard', href: '/office', icon: '▦' },
+    { label: lang === 'id' ? 'Dashboard' : 'Dashboard', href: '/office', icon: '▦' },
     { label: role === 'SUPERUSER' || role === 'EDITOR' ? 'Requests' : (lang === 'id' ? 'Request Saya' : 'My Requests'), href: '/office/requests', icon: '◫' },
     { label: lang === 'id' ? 'Task' : 'Tasks', href: '/office/tasks', icon: '✓' },
     { label: lang === 'id' ? 'Approval' : 'Approvals', href: '/office/approvals', icon: '◉' },
@@ -97,8 +116,6 @@ function mountOfficeNav() {
 
   wrapper.appendChild(nav);
 
-  // .sidebar-account has margin-top:auto. The module menu must be inserted
-  // before it; appending after it pushes the menu below the visible sidebar.
   if (account) sidebar.insertBefore(wrapper, account);
   else sidebar.appendChild(wrapper);
 }
@@ -113,19 +130,29 @@ export default function DashboardOfficeNavBridge() {
     }
 
     let frame = 0;
-    const sync = () => {
+    let disposed = false;
+
+    const sync = async () => {
+      const allowed = await readOfficeAccess();
+      if (disposed) return;
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(mountOfficeNav);
+      frame = requestAnimationFrame(() => mountOfficeNav(allowed));
     };
 
-    sync();
+    void sync();
 
-    const observer = new MutationObserver(sync);
+    const observer = new MutationObserver(() => {
+      if (document.querySelector('.app .sidebar') && !document.querySelector('[data-dashboard-office-nav]')) {
+        void sync();
+      }
+    });
     observer.observe(document.body, { childList: true, subtree: true });
+
     window.addEventListener('expiry-tracker-auth-change', sync);
     window.addEventListener('storage', sync);
 
     return () => {
+      disposed = true;
       cancelAnimationFrame(frame);
       observer.disconnect();
       window.removeEventListener('expiry-tracker-auth-change', sync);
