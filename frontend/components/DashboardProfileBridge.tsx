@@ -73,11 +73,14 @@ export default function DashboardProfileBridge() {
 
     setUser(readUser());
     void loadAccess(sessionStorage.getItem('expiry-tracker-token'));
-    const sync = () => { setUser(readUser()); void loadAccess(sessionStorage.getItem('expiry-tracker-token')); };
+    const sync = () => {
+      setUser(readUser());
+      const currentToken = sessionStorage.getItem('expiry-tracker-token');
+      void loadAccess(currentToken);
+      window.setTimeout(() => void loadAccess(currentToken), 150);
+    };
     window.addEventListener('expiry-tracker-auth-change', sync);
-    const observer = new MutationObserver(() => void loadAccess(sessionStorage.getItem('expiry-tracker-token')));
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => { window.removeEventListener('expiry-tracker-auth-change', sync); observer.disconnect(); };
+    return () => window.removeEventListener('expiry-tracker-auth-change', sync);
   }, [pathname]);
 
   useEffect(() => {
