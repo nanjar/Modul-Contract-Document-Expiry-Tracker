@@ -14,8 +14,10 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
+import { ModuleKey, Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ModuleAccess } from '../auth/module-access.decorator';
+import { ModuleAccessGuard } from '../auth/module-access.guard';
 import { Roles, RolesGuard } from '../auth/roles.guard';
 import { RemindersService } from '../reminders/reminders.service';
 import { StorageService } from '../storage/storage.service';
@@ -56,7 +58,8 @@ const EXTENSION_BY_MIME: Record<string, string> = {
 
 @ApiTags('documents')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleAccessGuard)
+@ModuleAccess(ModuleKey.CONTRACT_DOCUMENT)
 @Controller('documents')
 export class DocumentsController {
   constructor(
@@ -67,36 +70,42 @@ export class DocumentsController {
 
   @Get()
   @Roles(Role.SUPERUSER, Role.EDITOR, Role.VIEWER)
+  @ModuleAccess(ModuleKey.CONTRACT_DOCUMENT, 'DOCUMENT_VIEW')
   list(@Query() query: ListDocumentsQueryDto) {
     return this.documents.list(query);
   }
 
   @Get(':id')
   @Roles(Role.SUPERUSER, Role.EDITOR, Role.VIEWER)
+  @ModuleAccess(ModuleKey.CONTRACT_DOCUMENT, 'DOCUMENT_VIEW')
   findOne(@Param('id') id: string) {
     return this.documents.findOne(id);
   }
 
   @Post()
   @Roles(Role.SUPERUSER, Role.EDITOR)
+  @ModuleAccess(ModuleKey.CONTRACT_DOCUMENT, 'DOCUMENT_CREATE')
   create(@Body() dto: CreateDocumentDto, @Req() req: any) {
     return this.documents.create({ ...dto, createdById: req.user.sub });
   }
 
   @Patch(':id')
   @Roles(Role.SUPERUSER, Role.EDITOR)
+  @ModuleAccess(ModuleKey.CONTRACT_DOCUMENT, 'DOCUMENT_EDIT')
   update(@Param('id') id: string, @Body() dto: UpdateDocumentDto, @Req() req: any) {
     return this.documents.update(id, dto, req.user.sub);
   }
 
   @Post(':id/archive')
   @Roles(Role.SUPERUSER, Role.EDITOR)
+  @ModuleAccess(ModuleKey.CONTRACT_DOCUMENT, 'DOCUMENT_ARCHIVE')
   archive(@Param('id') id: string, @Req() req: any) {
     return this.documents.archive(id, req.user.sub);
   }
 
   @Post(':id/file')
   @Roles(Role.SUPERUSER, Role.EDITOR)
+  @ModuleAccess(ModuleKey.CONTRACT_DOCUMENT, 'DOCUMENT_FILE_UPLOAD')
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -172,6 +181,7 @@ export class DocumentsController {
 
   @Get(':id/file')
   @Roles(Role.SUPERUSER, Role.EDITOR, Role.VIEWER)
+  @ModuleAccess(ModuleKey.CONTRACT_DOCUMENT, 'DOCUMENT_FILE_DOWNLOAD')
   async downloadFile(@Param('id') id: string) {
     const document = await this.documents.findOne(id);
     if (!document.storageKey) throw new BadRequestException('Document has no file');
