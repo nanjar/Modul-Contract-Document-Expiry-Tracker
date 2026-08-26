@@ -2,7 +2,7 @@ FROM node:22-alpine AS build
 WORKDIR /app
 RUN corepack enable
 COPY package.json ./
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --no-frozen-lockfile --dangerously-allow-all-builds
 COPY . .
 ARG NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
@@ -15,7 +15,7 @@ WORKDIR /app
 RUN corepack enable
 ENV NODE_ENV=production
 COPY package.json ./
-RUN pnpm install --prod --no-frozen-lockfile
+RUN pnpm install --prod --no-frozen-lockfile --dangerously-allow-all-builds
 COPY --from=build /app/.next ./.next
 EXPOSE 3000
 CMD ["pnpm", "start"]
