@@ -5,9 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
-import { ModuleKey, Role } from '@prisma/client';
+import { ModuleKey, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import {
+  defaultPermissions,
+  isKnownModulePermission,
+} from '../rbac/permissions';
 
 @Injectable()
 export class UsersService {
@@ -102,18 +106,52 @@ export class UsersService {
   ) {
     await this.assertUserExists(userId);
 
+    const permissions = [...new Set(input.permissions)];
+    const invalidPermission = permissions.find((permission) => !isKnownModulePermission(permission));
+    if (invalidPermission) {
+      throw new ConflictException(`Unknown module permission: ${invalidPermission}`);
+    }
+
+    const modulePermissions = new Set(defaultPermissions(input.module, Role.SUPERUSER));
+    const invalidForModule = permissions.find((permission) => !modulePermissions.has(permission));
+    if (invalidForModule) {
+      throw new ConflictException(
+        `Permission ${invalidForModule} does not belong to module ${input.module}`,
+      );
+    }
+
     const existing = await this.prisma.userModuleAccess.findUnique({
       where: { userId_module: { userId, module: input.module } },
     });
+
+    if (permissions.length === 0) {
+      if (existing) {
+        await this.prisma.userModuleAccess.delete({ where: { id: existing.id } });
+        await this.audit.log({
+          actorId,
+          action: 'UPDATE',
+          entity: 'UserModuleAccess',
+          entityId: existing.id,
+          metadata: {
+            userId,
+            module: input.module,
+            previousPermissions: existing.permissions,
+            permissions: [],
+            access: false,
+          },
+        });
+      }
+      return null;
+    }
 
     const access = await this.prisma.userModuleAccess.upsert({
       where: { userId_module: { userId, module: input.module } },
       create: {
         userId,
         module: input.module,
-        permissions: [...new Set(input.permissions)],
+        permissions,
       },
-      update: { permissions: [...new Set(input.permissions)] },
+      update: { permissions },
     });
 
     await this.audit.log({
@@ -126,6 +164,7 @@ export class UsersService {
         module: input.module,
         previousPermissions: existing?.permissions ?? [],
         permissions: access.permissions,
+        access: true,
       },
     });
 
@@ -150,6 +189,18 @@ export class UsersService {
         name: input.name.trim(),
         passwordHash,
         role: input.role,
+        moduleAccess: {
+          create: [
+            {
+              module: ModuleKey.CONTRACT_DOCUMENT,
+              permissions: defaultPermissions(ModuleKey.CONTRACT_DOCUMENT, input.role),
+            },
+            {
+              module: ModuleKey.OFFICE_AUTOMATION,
+              permissions: defaultPermissions(ModuleKey.OFFICE_AUTOMATION, input.role),
+            },
+          ],
+        },
       },
       select: {
         id: true,
@@ -223,6 +274,22 @@ export class UsersService {
         updatedAt: true,
       },
     });
+
+    if (input.role !== undefined && input.role !== existing.role) {
+      const moduleAccess = await this.prisma.userModuleAccess.findMany({
+        where: { userId: id },
+        select: { id: true, module: true, permissions: true },
+      });
+      for (const access of moduleAccess) {
+        const nextPermissions = defaultPermissions(access.module, input.role);
+        if (nextPermissions.join('|') !== access.permissions.join('|')) {
+          await this.prisma.userModuleAccess.update({
+            where: { id: access.id },
+            data: { permissions: nextPermissions },
+          });
+        }
+      }
+    }
 
     await this.audit.log({
       actorId,
