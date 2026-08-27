@@ -1,23 +1,43 @@
 # Legacy Office Automation Migration
 
-The PRD v1.1 migration path moves legacy spreadsheet data into PostgreSQL and removes spreadsheet dependency from production workflows.
+PRD v1.1 moves legacy spreadsheet data into PostgreSQL and removes spreadsheet dependency from production workflows.
 
 ## Input
 
-Export the legacy workbook sheets as UTF-8 CSV files into one directory. The importer recognizes:
+The importer accepts either:
 
-- Employees.csv
-- Attendance.csv
-- LeaveRequests.csv
-- LateRequests.csv
-- WFHRequests.csv
-- OvertimeRequests.csv
-- ReimbursementRequests.csv
-- BusinessTripRequests.csv
-- AssetRequests.csv
-- MeetingBookings.csv
-- Announcements.csv
-- ReadReceipts.csv
+1. A directory of UTF-8 CSV exports named after the legacy sheets; or
+2. A normalized JSON workbook where each sheet is an array, for example:
+
+```json
+{
+  "Employees": [{"Name":"...","Email":"...","ChatId":"..."}],
+  "Attendance": [],
+  "Announcements": [],
+  "ReadReceipts": [],
+  "LeaveRequests": [],
+  "LateRequests": [],
+  "OvertimeRequests": [],
+  "WFHRequests": [],
+  "ReimbursementRequests": [],
+  "MeetingBookings": [],
+  "BusinessTripRequests": [],
+  "AssetRequests": []
+}
+```
+
+The actual legacy workbook inventory includes Employees, Attendance, Sessions, Announcements, ReadReceipts, LeaveRequests, LateRequests, OvertimeRequests, WFHRequests, ReimbursementRequests, MeetingBookings, BusinessTripRequests and AssetRequests. `Sessions` and the legacy `Dashboard` are derived/operational artifacts and are intentionally not persisted as source tables.
+
+## Mapping
+
+- Employees -> shared `User` + `UserTelegramIdentity`
+- Attendance -> `AttendanceRecord` + `AttendanceActionLog`
+- Leave/Late/WFH/Overtime/Reimbursement/BusinessTrip/Asset -> `OfficeRequest`
+- Announcements -> `Announcement`
+- ReadReceipts -> `AnnouncementReadReceipt`
+- MeetingBookings -> `MeetingRoom` + `MeetingBooking` + `MeetingAttendee`
+
+Migration is idempotent for the supported entity keys and produces duplicate counts instead of creating another copy.
 
 ## Safety
 
