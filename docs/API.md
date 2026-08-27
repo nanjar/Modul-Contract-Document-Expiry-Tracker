@@ -30,21 +30,29 @@ Existing document, file, reminder, dashboard and audit APIs remain active.
 
 ## Office Automation
 
-- `GET /office-automation/dashboard`
-- `GET /office-automation/reports`
-- `GET /office-automation/users`
-- `GET /office-automation/requests?all=true`
-- `POST /office-automation/requests`
-- `GET /office-automation/requests/:id`
-- `PATCH /office-automation/requests/:id`
-- `POST /office-automation/requests/:id/cancel`
-- `GET /office-automation/tasks?all=true`
-- `GET /office-automation/tasks/:id`
-- `PATCH /office-automation/tasks/:id`
-- `POST /office-automation/requests/:id/tasks`
-- `GET /office-automation/approvals?all=true`
-- `POST /office-automation/requests/:id/approvals`
-- `POST /office-automation/approvals/:id/decision`
+The PRD 1.1 canonical `/office/*` paths and the existing `/office-automation/*` paths are both supported.
+
+- `GET /office/dashboard`
+- `GET /office/reports`
+- `GET /office/requests`
+- `POST /office/requests`
+- `GET /office/requests/:id`
+- `PATCH /office/requests/:id`
+- `POST /office/requests/:id/cancel`
+- `GET /office/tasks`
+- `GET /office/tasks/:id`
+- `PATCH /office/tasks/:id`
+- `POST /office/requests/:id/tasks`
+- `GET /office/approvals`
+- `POST /office/requests/:id/approvals`
+- `POST /office/approvals/:id/decision`
+- `POST /office/approvals/:id/approve`
+- `POST /office/approvals/:id/reject`
+- `GET /office/requests/:id/attachments`
+- `POST /office/requests/:id/attachments` — multipart upload
+- `GET /office/attachments/:id` — signed download URL
+
+The same endpoints are available under `/office-automation/*` for backward compatibility.
 
 `all=true` is honored only for privileged Office users; regular users are automatically scoped to their own requests/tasks/assigned approvals.
 
