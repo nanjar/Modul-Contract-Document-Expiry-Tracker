@@ -8,13 +8,14 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
   app.enableCors({
     origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+    credentials: true,
   });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
 
   const config = new DocumentBuilder()
-    .setTitle('Contract & Document Expiry Tracker API')
-    .setDescription('REST API for contract and document expiry tracking')
-    .setVersion('0.1.0')
+    .setTitle('Business Operations Platform API')
+    .setDescription('REST API for Contract & Document Expiry Tracker and Office Automation')
+    .setVersion('1.1.0')
     .addBearerAuth()
     .build();
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
