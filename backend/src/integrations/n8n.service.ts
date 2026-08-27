@@ -20,30 +20,43 @@ export class N8nService {
       throw new Error('n8n webhook configuration is incomplete');
     }
 
-    // Send the secret in both the header and body. The repository's
-    // authoritative n8n workflow validates the body field, while the header
-    // keeps the transport compatible with integrations that validate headers.
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Contract-Tracker-Secret': webhookSecret,
-      },
-      body: JSON.stringify({
-        ...event,
-        secret: webhookSecret,
-      }),
-    });
+    const timeoutMs = Number(this.config.get<string>('n8n.webhookTimeoutMs') ?? 15000);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Math.max(1000, timeoutMs));
 
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`n8n webhook failed: HTTP ${response.status} ${body}`);
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Contract-Tracker-Secret': webhookSecret,
+          'X-Idempotency-Key': event.idempotencyKey,
+          'X-Integration-Event': event.event,
+        },
+        body: JSON.stringify({
+          ...event,
+          secret: webhookSecret,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`n8n webhook failed: HTTP ${response.status} ${body}`);
+      }
+
+      this.logger.log(
+        `n8n event dispatched: ${event.event} (${event.idempotencyKey})`,
+      );
+
+      return response;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`n8n webhook timeout after ${Math.max(1000, timeoutMs)}ms`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    this.logger.log(
-      `n8n event dispatched: ${event.event} (${event.idempotencyKey})`,
-    );
-
-    return response;
   }
 }
