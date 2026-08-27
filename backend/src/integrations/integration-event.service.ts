@@ -22,6 +22,22 @@ export class IntegrationEventService {
     private readonly n8n: N8nService,
   ) {}
 
+  async recoverStaleEvents(staleAfterMinutes = 5) {
+    const cutoff = new Date(Date.now() - staleAfterMinutes * 60 * 1000);
+    const result = await this.prisma.integrationEvent.updateMany({
+      where: {
+        status: 'PROCESSING',
+        updatedAt: { lt: cutoff },
+      },
+      data: {
+        status: 'PENDING',
+        availableAt: new Date(),
+        lastError: 'Recovered stale PROCESSING event after worker restart/timeout',
+      },
+    });
+    return result.count;
+  }
+
   async processPendingEvents(limit = 10) {
     if (this.processing) {
       return { processed: 0, skipped: true };
@@ -125,9 +141,6 @@ export class IntegrationEventService {
     const payload = raw as EventPayload;
     let enriched: EventPayload = { ...payload };
 
-    // Approval decision and task events carry only an entity/request id. Load
-    // the related business data here so the n8n workflow receives a complete
-    // notification payload instead of having to query the application DB.
     const requestId = typeof payload.requestId === 'string' ? payload.requestId : null;
     const taskId = typeof payload.taskId === 'string' ? payload.taskId : null;
 
