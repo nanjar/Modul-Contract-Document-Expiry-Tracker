@@ -157,7 +157,7 @@ model Document {
 }
 
 model Reminder {
-  id String @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @default(uuid())
   documentId String @db.Uuid
   daysBefore Int
   enabled Boolean @default(true)
@@ -192,6 +192,7 @@ model OfficeRequest {
   tasks OfficeTask[]
   approvals OfficeApproval[]
   activities OfficeActivityLog[]
+  attachments OfficeRequestAttachment[]
   @@index([requesterId, status])
   @@index([type, status])
   @@index([requiredDate])
@@ -241,6 +242,21 @@ model OfficeActivityLog {
   request OfficeRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   @@index([requestId, createdAt])
   @@index([actorId, createdAt])
+}
+
+model OfficeRequestAttachment {
+  id String @id @default(uuid()) @db.Uuid
+  requestId String @db.Uuid
+  uploadedById String @db.Uuid
+  storageKey String
+  originalFilename String
+  mimeType String
+  fileSize BigInt
+  createdAt DateTime @default(now())
+  request OfficeRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  uploadedBy User @relation(fields: [uploadedById], references: [id])
+  @@index([requestId, createdAt])
+  @@index([uploadedById, createdAt])
 }
 
 model IntegrationEvent {
