@@ -101,6 +101,7 @@ model User {
   announcementReads  AnnouncementReadReceipt[]
   meetingsCreated    MeetingBooking[]        @relation("MeetingCreator")
   meetingAttendees   MeetingAttendee[]
+  officeAttachmentsUploaded OfficeRequestAttachment[] @relation("OfficeAttachmentUploader")
 }
 
 model UserModuleAccess {
@@ -157,7 +158,7 @@ model Document {
 }
 
 model Reminder {
-  id String @id @default(uuid()) @default(uuid())
+  id String @id @default(uuid()) @db.Uuid
   documentId String @db.Uuid
   daysBefore Int
   enabled Boolean @default(true)
@@ -254,7 +255,7 @@ model OfficeRequestAttachment {
   fileSize BigInt
   createdAt DateTime @default(now())
   request OfficeRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  uploadedBy User @relation(fields: [uploadedById], references: [id])
+  uploadedBy User @relation("OfficeAttachmentUploader", fields: [uploadedById], references: [id])
   @@index([requestId, createdAt])
   @@index([uploadedById, createdAt])
 }
