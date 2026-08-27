@@ -21,11 +21,6 @@ export const OFFICE_AUTOMATION_PERMISSIONS = [
   'OFFICE_APPROVAL_VIEW',
   'OFFICE_APPROVAL_ACTION',
   'OFFICE_REPORT_VIEW',
-  // Backward-compatible service-level aliases used by the existing Office service.
-  'OFFICE_VIEW',
-  'OFFICE_REQUEST_MANAGE',
-  'OFFICE_TASK_MANAGE',
-  'OFFICE_APPROVE',
 ] as const;
 
 export const ALL_MODULE_PERMISSIONS = [
@@ -35,9 +30,7 @@ export const ALL_MODULE_PERMISSIONS = [
 
 export type ModulePermission = (typeof ALL_MODULE_PERMISSIONS)[number];
 
-const OFFICE_EDITOR_PERMISSIONS = [
-  ...OFFICE_AUTOMATION_PERMISSIONS,
-];
+const OFFICE_EDITOR_PERMISSIONS = [...OFFICE_AUTOMATION_PERMISSIONS];
 
 const OFFICE_VIEWER_PERMISSIONS = [
   'OFFICE_DASHBOARD_VIEW',
@@ -46,8 +39,6 @@ const OFFICE_VIEWER_PERMISSIONS = [
   'OFFICE_TASK_VIEW',
   'OFFICE_APPROVAL_VIEW',
   'OFFICE_REPORT_VIEW',
-  // Read-only service alias. Mutation aliases are deliberately excluded.
-  'OFFICE_VIEW',
 ];
 
 export const DEFAULT_MODULE_PERMISSIONS: Record<ModuleKey, Record<Role, readonly string[]>> = {
