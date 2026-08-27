@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -7,9 +8,12 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { ModuleKey } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ModuleAccess } from '../auth/module-access.decorator';
@@ -20,18 +24,35 @@ import { CreateOfficeTaskDto } from './dto/create-office-task.dto';
 import { DecideOfficeApprovalDto } from './dto/decide-office-approval.dto';
 import { UpdateOfficeRequestDto } from './dto/update-office-request.dto';
 import { UpdateOfficeTaskDto } from './dto/update-office-task.dto';
-import { OfficeAutomationService } from './office-automation.service';
+import { OfficeAttachmentService } from './office-attachment.service';
 import { OfficeAutomationQueryService } from './office-automation-query.service';
+import { OfficeAutomationService } from './office-automation.service';
+
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain',
+  'text/csv',
+  'image/jpeg',
+  'image/png',
+]);
 
 @ApiTags('office-automation')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, ModuleAccessGuard)
 @ModuleAccess(ModuleKey.OFFICE_AUTOMATION)
-@Controller('office-automation')
+@Controller(['office-automation', 'office'])
 export class OfficeAutomationController {
   constructor(
     private readonly office: OfficeAutomationService,
     private readonly queries: OfficeAutomationQueryService,
+    private readonly attachments: OfficeAttachmentService,
   ) {}
 
   @Get('dashboard')
@@ -88,7 +109,11 @@ export class OfficeAutomationController {
   @ModuleAccess(ModuleKey.OFFICE_AUTOMATION, 'OFFICE_TASK_VIEW')
   listTasks(@Req() req: any, @Query('assigneeId') assigneeId?: string, @Query('all') all?: string) {
     const isPrivileged = req.user?.role === 'SUPERUSER' || req.user?.role === 'EDITOR';
-    const effectiveAssignee = isPrivileged && all === 'true' ? undefined : assigneeId && req.user?.role === 'SUPERUSER' ? assigneeId : req.user.sub;
+    const effectiveAssignee = isPrivileged && all === 'true'
+      ? undefined
+      : assigneeId && req.user?.role === 'SUPERUSER'
+        ? assigneeId
+        : req.user.sub;
     return this.office.listTasks(req.user.sub, effectiveAssignee);
   }
 
@@ -126,5 +151,56 @@ export class OfficeAutomationController {
   @ModuleAccess(ModuleKey.OFFICE_AUTOMATION, 'OFFICE_APPROVAL_ACTION')
   decideApproval(@Param('id') id: string, @Body() dto: DecideOfficeApprovalDto, @Req() req: any) {
     return this.office.decideApproval(id, dto, req.user.sub);
+  }
+
+  @Post('approvals/:id/approve')
+  @ModuleAccess(ModuleKey.OFFICE_AUTOMATION, 'OFFICE_APPROVAL_ACTION')
+  approve(@Param('id') id: string, @Req() req: any) {
+    return this.office.decideApproval(id, { status: 'APPROVED' }, req.user.sub);
+  }
+
+  @Post('approvals/:id/reject')
+  @ModuleAccess(ModuleKey.OFFICE_AUTOMATION, 'OFFICE_APPROVAL_ACTION')
+  reject(@Param('id') id: string, @Body() body: { comment?: string }, @Req() req: any) {
+    return this.office.decideApproval(id, { status: 'REJECTED', comment: body?.comment }, req.user.sub);
+  }
+
+  @Get('requests/:id/attachments')
+  @ModuleAccess(ModuleKey.OFFICE_AUTOMATION, 'OFFICE_REQUEST_VIEW')
+  listAttachments(@Param('id') id: string, @Req() req: any) {
+    return this.attachments.list(id, req.user.sub);
+  }
+
+  @Post('requests/:id/attachments')
+  @ModuleAccess(ModuleKey.OFFICE_AUTOMATION, 'OFFICE_REQUEST_EDIT')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+      required: ['file'],
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: MAX_UPLOAD_BYTES },
+      fileFilter: (_req, file, callback) => {
+        if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+          callback(new BadRequestException(`Unsupported file type: ${file.mimetype}`), false);
+          return;
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  async uploadAttachment(@Param('id') id: string, @UploadedFile() file: any, @Req() req: any) {
+    if (!file) throw new BadRequestException('File is required');
+    return this.attachments.upload(id, req.user.sub, file);
+  }
+
+  @Get('attachments/:id')
+  @ModuleAccess(ModuleKey.OFFICE_AUTOMATION, 'OFFICE_REQUEST_VIEW')
+  downloadAttachment(@Param('id') id: string, @Req() req: any) {
+    return this.attachments.download(id, req.user.sub);
   }
 }
