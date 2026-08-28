@@ -20,15 +20,20 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 1
 
-      - name: Verify PRD v1.1 completion marker
+      - name: Check PRD v1.1 completion marker
         id: ready
+        shell: bash
         run: |
-          set -euo pipefail
-          test -f docs/PRD-V1.1-READY
-          grep -q '^STATUS=READY$' docs/PRD-V1.1-READY
+          if [[ -f docs/PRD-V1.1-READY ]] && grep -q '^STATUS=READY$' docs/PRD-V1.1-READY; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+            echo 'PRD v1.1 completion marker found.'
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'PRD v1.1 completion marker is not present; notification will not be sent.'
+          fi
 
       - name: Notify n8n
-        if: steps.ready.outcome == 'success'
+        if: steps.ready.outputs.ready == 'true'
         env:
           N8N_COMPLETION_WEBHOOK_URL: ${{ secrets.N8N_PRD_COMPLETION_WEBHOOK_URL }}
           N8N_WEBHOOK_SECRET: ${{ secrets.N8N_WEBHOOK_SECRET }}
