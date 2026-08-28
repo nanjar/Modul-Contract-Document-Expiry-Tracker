@@ -4,6 +4,8 @@ export default () => ({
     webhookSecret: process.env.N8N_WEBHOOK_SECRET,
   },
   telegram: {
+    // Telegram delivery is performed by n8n. These values are deployment
+    // configuration only and must never be persisted or included in events.
     botToken: process.env.TELEGRAM_BOT_TOKEN,
     defaultChatId: process.env.TELEGRAM_DEFAULT_CHAT_ID,
   },
