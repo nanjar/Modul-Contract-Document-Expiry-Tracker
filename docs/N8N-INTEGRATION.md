@@ -39,11 +39,16 @@ Webhook URL is configured with `N8N_WEBHOOK_URL` and authenticated with `N8N_WEB
 6. Failure returns to `PENDING` with exponential backoff.
 7. After five attempts the event becomes `FAILED` and keeps the error for observability.
 
-## Telegram
+## Telegram configuration
 
-n8n remains responsible for Telegram delivery. The application stores `UserTelegramIdentity.chatId` and does not embed Telegram business logic in the Office Automation module.
+Telegram delivery is owned by the n8n workflow. The Telegram Bot Token must be stored as an environment variable/secret in the n8n deployment and must never be committed to Git, stored in PostgreSQL, or included in the NestJS event payload.
 
-When a user has a Chat ID in PostgreSQL, the integration event contains that recipient. If no Chat ID exists, `telegramRecipients` is empty and n8n must not attempt to send a Telegram message for that user.
+The application may also expose these deployment variables for shared environment configuration:
+
+- `TELEGRAM_BOT_TOKEN` — Telegram bot token; secret, never log it.
+- `TELEGRAM_DEFAULT_CHAT_ID` — optional fallback chat ID; do not use it when a request has explicit recipients resolved from PostgreSQL.
+
+Employee-specific `UserTelegramIdentity.chatId` remains the authoritative recipient mapping. If no Chat ID exists, `telegramRecipients` is empty and n8n must not attempt to send Telegram for that employee.
 
 ## Supported Office events
 
