@@ -3,6 +3,10 @@ export default () => ({
     webhookUrl: process.env.N8N_WEBHOOK_URL,
     webhookSecret: process.env.N8N_WEBHOOK_SECRET,
   },
+  telegram: {
+    botToken: process.env.TELEGRAM_BOT_TOKEN,
+    defaultChatId: process.env.TELEGRAM_DEFAULT_CHAT_ID,
+  },
   s3: {
     endpoint: process.env.S3_ENDPOINT,
     region: process.env.S3_REGION || 'us-east-1',
