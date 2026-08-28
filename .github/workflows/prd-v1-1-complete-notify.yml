@@ -1,0 +1,46 @@
+name: PRD v1.1 Completion Notification
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify n8n
+        env:
+          N8N_COMPLETION_WEBHOOK_URL: ${{ secrets.N8N_PRD_COMPLETION_WEBHOOK_URL }}
+          N8N_WEBHOOK_SECRET: ${{ secrets.N8N_WEBHOOK_SECRET }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          test -n "$N8N_COMPLETION_WEBHOOK_URL"
+          test -n "$N8N_WEBHOOK_SECRET"
+
+          payload=$(jq -n \
+            --arg event "PRD_V1_1_COMPLETE" \
+            --arg repo "${GITHUB_REPOSITORY}" \
+            --arg branch "main" \
+            --arg commit "$COMMIT_SHA" \
+            --arg runId "$RUN_ID" \
+            --arg runUrl "$RUN_URL" \
+            --arg recipient "nanjar.budiman@gmail.com" \
+            '{event:$event,repository:$repo,branch:$branch,commit:$commit,workflowRunId:$runId,workflowRunUrl:$runUrl,recipientEmail:$recipient,idempotencyKey:("prd-v1.1-complete:" + $commit)}')
+
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            -X POST "$N8N_COMPLETION_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -H "X-Contract-Tracker-Secret: $N8N_WEBHOOK_SECRET" \
+            -H "X-Idempotency-Key: prd-v1.1-complete:$COMMIT_SHA" \
+            -H 'X-Integration-Event: PRD_V1_1_COMPLETE' \
+            --data "$payload"
