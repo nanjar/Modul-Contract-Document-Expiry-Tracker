@@ -33,10 +33,7 @@ export class N8nService {
           'X-Idempotency-Key': event.idempotencyKey,
           'X-Integration-Event': event.event,
         },
-        body: JSON.stringify({
-          ...event,
-          secret: webhookSecret,
-        }),
+        body: JSON.stringify(event),
         signal: controller.signal,
       });
 
