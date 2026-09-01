@@ -47,7 +47,7 @@ jobs:
       - run: pnpm exec prisma generate
       - run: pnpm exec prisma migrate deploy
       - name: Legacy migration dry-run smoke test
-        run: pnpm legacy:dry-run -- --input=prisma/fixtures/legacy-smoke.json
+        run: pnpm legacy:dry-run -- --input=prisma/fixtures/legacy-ci-smoke.json
       - run: pnpm test --runInBand
       - run: pnpm build
 
