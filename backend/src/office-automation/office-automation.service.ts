@@ -32,8 +32,12 @@ export class OfficeAutomationService {
   async list(requesterId?: string, actorId?: string) {
     if (actorId) await this.assertAccess(actorId, PERMISSIONS.VIEW);
 
+    const effectiveRequesterId = actorId && !(await this.canManageOffice(actorId))
+      ? actorId
+      : requesterId;
+
     return this.prisma.officeRequest.findMany({
-      where: requesterId ? { requesterId } : undefined,
+      where: effectiveRequesterId ? { requesterId: effectiveRequesterId } : undefined,
       include: {
         requester: { select: { id: true, name: true, email: true, role: true } },
         approvals: true,
@@ -56,17 +60,8 @@ export class OfficeAutomationService {
     });
 
     if (!request) throw new NotFoundException('Office request not found');
-    if (requesterIdBoundary(request.requesterId, actorId) === false) {
-      const access = await this.prisma.userModuleAccess.findUnique({
-        where: { userId_module: { userId: actorId, module: OFFICE } },
-      });
-      const user = await this.prisma.user.findUnique({
-        where: { id: actorId },
-        select: { role: true },
-      });
-      if (user?.role !== 'SUPERUSER' && !access?.permissions.includes(PERMISSIONS.MANAGE)) {
-        throw new ForbiddenException('You can only view your own office requests');
-      }
+    if (request.requesterId !== actorId && !(await this.canManageOffice(actorId))) {
+      throw new ForbiddenException('You can only view your own office requests');
     }
     return request;
   }
@@ -130,7 +125,7 @@ export class OfficeAutomationService {
     await this.assertAccess(actorId, PERMISSIONS.MANAGE);
     const existing = await this.getRequestOrThrow(id);
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
       const request = await tx.officeRequest.update({
         where: { id },
         data: {
@@ -166,8 +161,6 @@ export class OfficeAutomationService {
 
       return request;
     });
-
-    return updated;
   }
 
   async cancel(id: string, actorId: string) {
@@ -210,8 +203,9 @@ export class OfficeAutomationService {
 
   async listTasks(actorId: string, assigneeId?: string) {
     await this.assertAccess(actorId, PERMISSIONS.VIEW);
+    const effectiveAssigneeId = (await this.canManageOffice(actorId)) ? assigneeId : actorId;
     return this.prisma.officeTask.findMany({
-      where: assigneeId ? { assigneeId } : undefined,
+      where: effectiveAssigneeId ? { assigneeId: effectiveAssigneeId } : undefined,
       include: { request: true, assignee: { select: { id: true, name: true, email: true } } },
       orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
     });
@@ -222,7 +216,7 @@ export class OfficeAutomationService {
     await this.getRequestOrThrow(requestId);
     if (dto.assigneeId) await this.assertUserExists(dto.assigneeId);
 
-    const task = await this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
       const created = await tx.officeTask.create({
         data: {
           requestId,
@@ -246,7 +240,6 @@ export class OfficeAutomationService {
       });
       return created;
     });
-    return task;
   }
 
   async updateTask(id: string, dto: UpdateOfficeTaskDto, actorId: string) {
@@ -254,6 +247,10 @@ export class OfficeAutomationService {
     const existing = await this.prisma.officeTask.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Office task not found');
     if (dto.assigneeId) await this.assertUserExists(dto.assigneeId);
+
+    if (existing.assigneeId !== actorId && !(await this.canManageOffice(actorId))) {
+      throw new ForbiddenException('You can only update your assigned office tasks');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const task = await tx.officeTask.update({
@@ -402,6 +399,16 @@ export class OfficeAutomationService {
     await this.users.assertModuleAccess(userId, OFFICE, permission);
   }
 
+  private async canManageOffice(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (user?.role === 'SUPERUSER') return true;
+    const access = await this.prisma.userModuleAccess.findUnique({
+      where: { userId_module: { userId, module: OFFICE } },
+      select: { permissions: true },
+    });
+    return Boolean(access?.permissions.includes(PERMISSIONS.MANAGE));
+  }
+
   private async getRequestOrThrow(id: string) {
     const request = await this.prisma.officeRequest.findUnique({ where: { id } });
     if (!request) throw new NotFoundException('Office request not found');
@@ -412,8 +419,4 @@ export class OfficeAutomationService {
     const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true, isActive: true } });
     if (!user || !user.isActive) throw new NotFoundException('Active user not found');
   }
-}
-
-function requesterIdBoundary(requesterId: string, actorId: string) {
-  return requesterId === actorId;
 }
