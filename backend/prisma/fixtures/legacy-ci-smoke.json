@@ -1,0 +1,11 @@
+{
+  "Employees": [
+    {
+      "Email": "legacy.employee@example.com",
+      "Name": "Legacy Employee",
+      "ChatId": "999001",
+      "Division": "Operations",
+      "Position": "Staff"
+    }
+  ]
+}
