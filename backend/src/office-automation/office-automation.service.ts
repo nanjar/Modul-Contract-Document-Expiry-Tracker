@@ -15,11 +15,16 @@ import { UpdateOfficeTaskDto } from './dto/update-office-task.dto';
 
 const OFFICE = ModuleKey.OFFICE_AUTOMATION;
 const PERMISSIONS = {
-  VIEW: 'OFFICE_VIEW',
-  CREATE: 'OFFICE_REQUEST_CREATE',
-  MANAGE: 'OFFICE_REQUEST_MANAGE',
-  TASK: 'OFFICE_TASK_MANAGE',
-  APPROVE: 'OFFICE_APPROVE',
+  DASHBOARD: 'OFFICE_DASHBOARD_VIEW',
+  REQUEST_VIEW: 'OFFICE_REQUEST_VIEW',
+  REQUEST_CREATE: 'OFFICE_REQUEST_CREATE',
+  REQUEST_EDIT: 'OFFICE_REQUEST_EDIT',
+  TASK_VIEW: 'OFFICE_TASK_VIEW',
+  TASK_UPDATE: 'OFFICE_TASK_UPDATE',
+  TASK_ASSIGN: 'OFFICE_TASK_ASSIGN',
+  APPROVAL_VIEW: 'OFFICE_APPROVAL_VIEW',
+  APPROVAL_ACTION: 'OFFICE_APPROVAL_ACTION',
+  REPORT: 'OFFICE_REPORT_VIEW',
 } as const;
 
 @Injectable()
@@ -30,7 +35,7 @@ export class OfficeAutomationService {
   ) {}
 
   async list(requesterId?: string, actorId?: string) {
-    if (actorId) await this.assertAccess(actorId, PERMISSIONS.VIEW);
+    if (actorId) await this.assertAccess(actorId, PERMISSIONS.REQUEST_VIEW);
 
     const effectiveRequesterId = actorId && !(await this.canManageOffice(actorId))
       ? actorId
@@ -48,7 +53,7 @@ export class OfficeAutomationService {
   }
 
   async findOne(id: string, actorId: string) {
-    await this.assertAccess(actorId, PERMISSIONS.VIEW);
+    await this.assertAccess(actorId, PERMISSIONS.REQUEST_VIEW);
     const request = await this.prisma.officeRequest.findUnique({
       where: { id },
       include: {
@@ -67,7 +72,7 @@ export class OfficeAutomationService {
   }
 
   async create(dto: CreateOfficeRequestDto, requesterId: string) {
-    await this.assertAccess(requesterId, PERMISSIONS.CREATE);
+    await this.assertAccess(requesterId, PERMISSIONS.REQUEST_CREATE);
     const requestNumber = `OFF-${new Date().getFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     const startDate = dto.startDate ? new Date(dto.startDate) : undefined;
     const endDate = dto.endDate ? new Date(dto.endDate) : undefined;
@@ -122,7 +127,7 @@ export class OfficeAutomationService {
   }
 
   async update(id: string, dto: UpdateOfficeRequestDto, actorId: string) {
-    await this.assertAccess(actorId, PERMISSIONS.MANAGE);
+    await this.assertAccess(actorId, PERMISSIONS.REQUEST_EDIT);
     const existing = await this.getRequestOrThrow(id);
 
     return this.prisma.$transaction(async (tx) => {
@@ -164,7 +169,7 @@ export class OfficeAutomationService {
   }
 
   async cancel(id: string, actorId: string) {
-    await this.assertAccess(actorId, PERMISSIONS.MANAGE);
+    await this.assertAccess(actorId, PERMISSIONS.REQUEST_EDIT);
     return this.prisma.$transaction(async (tx) => {
       const request = await tx.officeRequest.findUnique({ where: { id } });
       if (!request) throw new NotFoundException('Office request not found');
@@ -202,7 +207,7 @@ export class OfficeAutomationService {
   }
 
   async listTasks(actorId: string, assigneeId?: string) {
-    await this.assertAccess(actorId, PERMISSIONS.VIEW);
+    await this.assertAccess(actorId, PERMISSIONS.TASK_VIEW);
     const effectiveAssigneeId = (await this.canManageOffice(actorId)) ? assigneeId : actorId;
     return this.prisma.officeTask.findMany({
       where: effectiveAssigneeId ? { assigneeId: effectiveAssigneeId } : undefined,
@@ -212,7 +217,7 @@ export class OfficeAutomationService {
   }
 
   async createTask(requestId: string, dto: CreateOfficeTaskDto, actorId: string) {
-    await this.assertAccess(actorId, PERMISSIONS.TASK);
+    await this.assertAccess(actorId, PERMISSIONS.TASK_ASSIGN);
     await this.getRequestOrThrow(requestId);
     if (dto.assigneeId) await this.assertUserExists(dto.assigneeId);
 
@@ -243,7 +248,7 @@ export class OfficeAutomationService {
   }
 
   async updateTask(id: string, dto: UpdateOfficeTaskDto, actorId: string) {
-    await this.assertAccess(actorId, PERMISSIONS.TASK);
+    await this.assertAccess(actorId, PERMISSIONS.TASK_UPDATE);
     const existing = await this.prisma.officeTask.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Office task not found');
     if (dto.assigneeId) await this.assertUserExists(dto.assigneeId);
@@ -272,7 +277,7 @@ export class OfficeAutomationService {
   }
 
   async createApproval(requestId: string, dto: CreateOfficeApprovalDto, actorId: string) {
-    await this.assertAccess(actorId, PERMISSIONS.MANAGE);
+    await this.assertAccess(actorId, PERMISSIONS.APPROVAL_ACTION);
     await this.getRequestOrThrow(requestId);
     await this.assertUserExists(dto.approverId);
 
@@ -296,7 +301,7 @@ export class OfficeAutomationService {
   }
 
   async decideApproval(id: string, dto: DecideOfficeApprovalDto, actorId: string) {
-    await this.assertAccess(actorId, PERMISSIONS.APPROVE);
+    await this.assertAccess(actorId, PERMISSIONS.APPROVAL_ACTION);
     const approval = await this.prisma.officeApproval.findUnique({ where: { id } });
     if (!approval) throw new NotFoundException('Office approval not found');
     if (approval.approverId !== actorId) throw new ForbiddenException('Only the assigned approver can decide this approval');
@@ -331,7 +336,7 @@ export class OfficeAutomationService {
   }
 
   async dashboard(actorId: string) {
-    await this.assertAccess(actorId, PERMISSIONS.VIEW);
+    await this.assertAccess(actorId, PERMISSIONS.DASHBOARD);
 
     const [
       pendingRequests,
@@ -406,7 +411,7 @@ export class OfficeAutomationService {
       where: { userId_module: { userId, module: OFFICE } },
       select: { permissions: true },
     });
-    return Boolean(access?.permissions.includes(PERMISSIONS.MANAGE));
+    return Boolean(access?.permissions.includes(PERMISSIONS.REQUEST_EDIT));
   }
 
   private async getRequestOrThrow(id: string) {
