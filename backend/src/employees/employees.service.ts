@@ -1,8 +1,9 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ModuleKey, Prisma, Role } from '@prisma/client';
 import * as argon2 from 'argon2';
-import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { defaultPermissions } from '../rbac/permissions';
 
 const employeeSelect = {
   id: true,
@@ -78,18 +79,33 @@ export class EmployeesService {
     const passwordHash = await argon2.hash(input.password);
 
     try {
-      const employee = await this.prisma.user.create({
-        data: {
-          email,
-          name: input.name.trim(),
-          passwordHash,
-          role: input.role,
-          employeeNumber,
-          department: input.department?.trim() || undefined,
-          position: input.position?.trim() || undefined,
-          managerId: input.managerId || undefined,
-        },
-        select: employeeSelect,
+      const employee = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({
+          data: {
+            email,
+            name: input.name.trim(),
+            passwordHash,
+            role: input.role,
+            employeeNumber,
+            department: input.department?.trim() || undefined,
+            position: input.position?.trim() || undefined,
+            managerId: input.managerId || undefined,
+            moduleAccess: {
+              create: [
+                {
+                  module: ModuleKey.CONTRACT_DOCUMENT,
+                  permissions: defaultPermissions(ModuleKey.CONTRACT_DOCUMENT, input.role),
+                },
+                {
+                  module: ModuleKey.OFFICE_AUTOMATION,
+                  permissions: defaultPermissions(ModuleKey.OFFICE_AUTOMATION, input.role),
+                },
+              ],
+            },
+          },
+          select: employeeSelect,
+        });
+        return created;
       });
 
       await this.audit.log({
@@ -130,6 +146,12 @@ export class EmployeesService {
       throw new ConflictException('You cannot change your own role');
     }
 
+    const removingSuperuserAccess =
+      existing.role === Role.SUPERUSER &&
+      existing.isActive &&
+      ((input.role !== undefined && input.role !== Role.SUPERUSER) || input.isActive === false);
+    if (removingSuperuserAccess) await this.assertNotLastActiveSuperuser(id);
+
     if (input.managerId === id) throw new ConflictException('An employee cannot be their own manager');
     await this.validateManager(input.managerId ?? undefined);
 
@@ -157,6 +179,22 @@ export class EmployeesService {
       select: employeeSelect,
     });
 
+    if (input.role !== undefined && input.role !== existing.role) {
+      const moduleAccess = await this.prisma.userModuleAccess.findMany({
+        where: { userId: id },
+        select: { id: true, module: true, permissions: true },
+      });
+      for (const access of moduleAccess) {
+        const nextPermissions = defaultPermissions(access.module, input.role);
+        if (nextPermissions.join('|') !== access.permissions.join('|')) {
+          await this.prisma.userModuleAccess.update({
+            where: { id: access.id },
+            data: { permissions: nextPermissions },
+          });
+        }
+      }
+    }
+
     await this.audit.log({
       actorId,
       action: 'UPDATE',
@@ -180,5 +218,12 @@ export class EmployeesService {
     const manager = await this.prisma.user.findUnique({ where: { id: managerId }, select: { id: true, isActive: true } });
     if (!manager) throw new NotFoundException('Manager not found');
     if (!manager.isActive) throw new ConflictException('Manager must be active');
+  }
+
+  private async assertNotLastActiveSuperuser(id: string) {
+    const activeSuperusers = await this.prisma.user.count({ where: { role: Role.SUPERUSER, isActive: true } });
+    if (activeSuperusers <= 1) {
+      throw new ConflictException('At least one active superuser account must remain');
+    }
   }
 }
