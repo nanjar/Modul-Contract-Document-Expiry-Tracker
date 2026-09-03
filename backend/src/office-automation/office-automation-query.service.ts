@@ -4,8 +4,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 
 const OFFICE = ModuleKey.OFFICE_AUTOMATION;
-const VIEW = 'OFFICE_VIEW';
-const APPROVE = 'OFFICE_APPROVE';
+const PERMISSIONS = {
+  TASK_VIEW: 'OFFICE_TASK_VIEW',
+  TASK_ASSIGN: 'OFFICE_TASK_ASSIGN',
+  APPROVAL_VIEW: 'OFFICE_APPROVAL_VIEW',
+  REPORT: 'OFFICE_REPORT_VIEW',
+  APPROVAL_ACTION: 'OFFICE_APPROVAL_ACTION',
+} as const;
 
 @Injectable()
 export class OfficeAutomationQueryService {
@@ -15,7 +20,7 @@ export class OfficeAutomationQueryService {
   ) {}
 
   async approvals(actorId: string, all = false) {
-    await this.users.assertModuleAccess(actorId, OFFICE, VIEW);
+    await this.users.assertModuleAccess(actorId, OFFICE, PERMISSIONS.APPROVAL_VIEW);
     const user = await this.prisma.user.findUnique({ where: { id: actorId }, select: { role: true } });
     const canViewAll = user?.role === 'SUPERUSER' || user?.role === 'EDITOR';
     return this.prisma.officeApproval.findMany({
@@ -29,7 +34,7 @@ export class OfficeAutomationQueryService {
   }
 
   async task(id: string, actorId: string) {
-    await this.users.assertModuleAccess(actorId, OFFICE, VIEW);
+    await this.users.assertModuleAccess(actorId, OFFICE, PERMISSIONS.TASK_VIEW);
     const task = await this.prisma.officeTask.findUnique({
       where: { id },
       include: {
@@ -46,7 +51,7 @@ export class OfficeAutomationQueryService {
   }
 
   async usersForOffice(actorId: string) {
-    await this.users.assertModuleAccess(actorId, OFFICE, VIEW);
+    await this.users.assertModuleAccess(actorId, OFFICE, PERMISSIONS.TASK_ASSIGN);
     return this.prisma.user.findMany({
       where: { isActive: true },
       select: { id: true, name: true, email: true, role: true },
@@ -55,7 +60,7 @@ export class OfficeAutomationQueryService {
   }
 
   async report(actorId: string) {
-    await this.users.assertModuleAccess(actorId, OFFICE, VIEW);
+    await this.users.assertModuleAccess(actorId, OFFICE, PERMISSIONS.REPORT);
     const [requests, tasks, approvals, activeUsers] = await Promise.all([
       this.prisma.officeRequest.groupBy({ by: ['status'], _count: { _all: true } }),
       this.prisma.officeTask.groupBy({ by: ['status'], _count: { _all: true } }),
@@ -78,7 +83,7 @@ export class OfficeAutomationQueryService {
   }
 
   async assertCanApprove(actorId: string) {
-    await this.users.assertModuleAccess(actorId, OFFICE, APPROVE);
+    await this.users.assertModuleAccess(actorId, OFFICE, PERMISSIONS.APPROVAL_ACTION);
     return true;
   }
 }
