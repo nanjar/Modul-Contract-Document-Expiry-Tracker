@@ -88,9 +88,7 @@ export class IntegrationEventService {
           });
 
           processed++;
-          this.logger.log(
-            `Integration event delivered: ${event.event} ${event.id}`,
-          );
+          this.logger.log(`Integration event delivered: ${event.event} ${event.id}`);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           const nextAttempt = event.attempts + 1;
@@ -196,16 +194,14 @@ export class IntegrationEventService {
       enriched.assigneeId,
       enriched.approverId,
       enriched.actorId,
-    ].filter(
-      (value): value is string => typeof value === 'string' && value.length > 0,
-    );
+    ].filter((value): value is string => typeof value === 'string' && value.length > 0);
 
     const userIds = [...new Set(candidateIds)];
     if (userIds.length === 0) return enriched;
 
     const [identities, users] = await Promise.all([
       this.prisma.userTelegramIdentity.findMany({
-        where: { userId: { in: userIds } },
+        where: { userId: { in: userIds }, isVerified: true },
         select: {
           userId: true,
           chatId: true,
@@ -229,9 +225,7 @@ export class IntegrationEventService {
     }));
 
     const recipientsByUserId = new Map(
-      telegramRecipients
-        .filter((recipient) => recipient.isVerified && recipient.chatId)
-        .map((recipient) => [recipient.userId, recipient]),
+      telegramRecipients.map((recipient) => [recipient.userId, recipient]),
     );
 
     const recipient = (id: unknown) =>
