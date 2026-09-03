@@ -15,11 +15,14 @@ The GitHub workflow sends `PRD_V1_1_COMPLETE` only when the `CI` workflow on `ma
 
 Import `prd-v1-1-completion-email.workflow.json` into the n8n instance.
 
-Configure the Email Send node with the SMTP credential used by your n8n installation. Set this n8n environment variable:
+Configure the Email Send node with the SMTP credential used by your n8n installation. Set these n8n environment variables:
 
 ```env
+N8N_WEBHOOK_SECRET=your-shared-webhook-secret
 PRD_COMPLETION_FROM_EMAIL=your-verified-sender@example.com
 ```
+
+The workflow validates the `X-Contract-Tracker-Secret` header against `N8N_WEBHOOK_SECRET` before accepting the completion event. Unauthorized requests receive HTTP 401; malformed completion events receive HTTP 400.
 
 Activate the workflow and use its production webhook URL as the GitHub secret `N8N_PRD_COMPLETION_WEBHOOK_URL`.
 
