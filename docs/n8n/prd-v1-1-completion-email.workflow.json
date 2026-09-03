@@ -1,59 +1,23 @@
 {
   "name": "PRD v1.1 Complete → Email",
   "nodes": [
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "prd-v1-1-complete",
-        "responseMode": "onReceived",
-        "options": {}
-      },
-      "id": "prd-v1-1-webhook",
-      "name": "GitHub Completion Webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [-520, 0],
-      "webhookId": "prd-v1-1-complete"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2},
-          "conditions": [
-            {"id": "event", "leftValue": "={{ $json.event }}", "rightValue": "PRD_V1_1_COMPLETE", "operator": {"type": "string", "operation": "equals"}},
-            {"id": "recipient", "leftValue": "={{ $json.recipientEmail }}", "rightValue": "nanjar.budiman@gmail.com", "operator": {"type": "string", "operation": "equals"}}
-          ],
-          "combinator": "and"
-        }
-      },
-      "id": "validate-event",
-      "name": "Validate Completion Event",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [-280, 0]
-    },
-    {
-      "parameters": {
-        "fromEmail": "={{ $env.PRD_COMPLETION_FROM_EMAIL }}",
-        "toEmail": "={{ $json.recipientEmail }}",
-        "subject": "Contract & Document Expiry Tracker — PRD v1.1 Complete",
-        "emailFormat": "text",
-        "text": "PRD v1.1 automated completion gate has passed.\n\nRepository: {{ $json.repository }}\nBranch: {{ $json.branch }}\nCommit: {{ $json.commit }}\nWorkflow run: {{ $json.workflowRunUrl }}\n\nAll CI checks associated with the completion gate passed. Please proceed with the final manual acceptance test."
-      },
-      "id": "send-completion-email",
-      "name": "Send Completion Email",
-      "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2.1,
-      "position": [0, -40]
-    }
+    {"parameters":{"httpMethod":"POST","path":"prd-v1-1-complete","responseMode":"responseNode","options":{}},"id":"prd-v1-1-webhook","name":"GitHub Completion Webhook","type":"n8n-nodes-base.webhook","typeVersion":2,"position":[-760,0],"webhookId":"prd-v1-1-complete"},
+    {"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"secret","leftValue":"={{ $json.headers['x-contract-tracker-secret'] }}","rightValue":"={{ $env.N8N_WEBHOOK_SECRET }}","operator":{"type":"string","operation":"equals"}}],"combinator":"and"}},"id":"validate-secret","name":"Validate Webhook Secret","type":"n8n-nodes-base.if","typeVersion":2.2,"position":[-520,0]},
+    {"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"id":"event","leftValue":"={{ $json.event }}","rightValue":"PRD_V1_1_COMPLETE","operator":{"type":"string","operation":"equals"}},{"id":"recipient","leftValue":"={{ $json.recipientEmail }}","rightValue":"nanjar.budiman@gmail.com","operator":{"type":"string","operation":"equals"}}],"combinator":"and"}},"id":"validate-event","name":"Validate Completion Event","type":"n8n-nodes-base.if","typeVersion":2.2,"position":[-280,0]},
+    {"parameters":{"fromEmail":"={{ $env.PRD_COMPLETION_FROM_EMAIL }}","toEmail":"={{ $json.recipientEmail }}","subject":"Contract & Document Expiry Tracker — PRD v1.1 Complete","emailFormat":"text","text":"PRD v1.1 automated completion gate has passed.\n\nRepository: {{ $json.repository }}\nBranch: {{ $json.branch }}\nCommit: {{ $json.commit }}\nWorkflow run: {{ $json.workflowRunUrl }}\n\nAll CI checks associated with the completion gate passed. Please proceed with the final manual acceptance test."},"id":"send-completion-email","name":"Send Completion Email","type":"n8n-nodes-base.emailSend","typeVersion":2.1,"position":[0,-80]},
+    {"parameters":{"respondWith":"json","responseBody":"={\"ok\":true,\"accepted\":true}","options":{"responseCode":200}},"id":"respond-ok","name":"Respond OK","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[260,-80]},
+    {"parameters":{"respondWith":"json","responseBody":"={\"ok\":false,\"error\":\"Unauthorized\"}","options":{"responseCode":401}},"id":"respond-unauthorized","name":"Respond Unauthorized","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[-280,180]},
+    {"parameters":{"respondWith":"json","responseBody":"={\"ok\":false,\"error\":\"Invalid completion event\"}","options":{"responseCode":400}},"id":"respond-invalid","name":"Respond Invalid Event","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[0,160]}
   ],
   "connections": {
-    "GitHub Completion Webhook": {"main": [[{"node": "Validate Completion Event", "type": "main", "index": 0}]]},
-    "Validate Completion Event": {"main": [[{"node": "Send Completion Email", "type": "main", "index": 0}], []]}
+    "GitHub Completion Webhook":{"main":[[{"node":"Validate Webhook Secret","type":"main","index":0}]]},
+    "Validate Webhook Secret":{"main":[[{"node":"Validate Completion Event","type":"main","index":0}],[{"node":"Respond Unauthorized","type":"main","index":0}]]},
+    "Validate Completion Event":{"main":[[{"node":"Send Completion Email","type":"main","index":0}],[{"node":"Respond Invalid Event","type":"main","index":0}]]},
+    "Send Completion Email":{"main":[[{"node":"Respond OK","type":"main","index":0}]]}
   },
-  "active": false,
-  "settings": {"executionOrder": "v1"},
-  "pinData": {},
-  "meta": {"templateCredsSetupCompleted": false},
-  "tags": []
+  "active":false,
+  "settings":{"executionOrder":"v1"},
+  "pinData":{},
+  "meta":{"templateCredsSetupCompleted":false},
+  "tags":[]
 }
