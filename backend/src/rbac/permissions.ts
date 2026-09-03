@@ -23,29 +23,14 @@ export const OFFICE_AUTOMATION_PERMISSIONS = [
   'OFFICE_REPORT_VIEW',
 ] as const;
 
-// Internal compatibility permissions used by the current service implementation.
-// They are not part of the public PRD permission matrix and are never granted by
-// default to EDITOR/VIEWER accounts. They will be removed once the service layer
-// is fully canonicalized.
-const OFFICE_INTERNAL_COMPAT_PERMISSIONS = [
-  'OFFICE_VIEW',
-  'OFFICE_REQUEST_MANAGE',
-  'OFFICE_TASK_MANAGE',
-  'OFFICE_APPROVE',
-] as const;
-
 export const ALL_MODULE_PERMISSIONS = [
   ...CONTRACT_DOCUMENT_PERMISSIONS,
   ...OFFICE_AUTOMATION_PERMISSIONS,
-  ...OFFICE_INTERNAL_COMPAT_PERMISSIONS,
 ] as const;
 
 export type ModulePermission = (typeof ALL_MODULE_PERMISSIONS)[number];
 
-const OFFICE_EDITOR_PERMISSIONS = [
-  ...OFFICE_AUTOMATION_PERMISSIONS,
-  ...OFFICE_INTERNAL_COMPAT_PERMISSIONS,
-];
+const OFFICE_EDITOR_PERMISSIONS = [...OFFICE_AUTOMATION_PERMISSIONS];
 
 const OFFICE_VIEWER_PERMISSIONS = [
   'OFFICE_DASHBOARD_VIEW',
