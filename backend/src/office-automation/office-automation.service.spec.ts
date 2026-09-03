@@ -29,10 +29,19 @@ describe('OfficeAutomationService access boundaries', () => {
     jest.clearAllMocks();
     service = new OfficeAutomationService(prisma, users);
     users.assertModuleAccess.mockResolvedValue(true);
-    prisma.user.findUnique.mockResolvedValue({ role: 'EMPLOYEE' });
-    prisma.userModuleAccess.findUnique.mockResolvedValue({ permissions: ['OFFICE_VIEW'] });
+    prisma.user.findUnique.mockResolvedValue({ role: 'VIEWER' });
+    prisma.userModuleAccess.findUnique.mockResolvedValue({ permissions: ['OFFICE_REQUEST_VIEW'] });
     prisma.officeRequest.findMany.mockResolvedValue([]);
     prisma.officeTask.findMany.mockResolvedValue([]);
+  });
+
+  it('uses canonical request-view permission for request lists', async () => {
+    await service.list(undefined, 'employee-1');
+    expect(users.assertModuleAccess).toHaveBeenCalledWith(
+      'employee-1',
+      'OFFICE_AUTOMATION',
+      'OFFICE_REQUEST_VIEW',
+    );
   });
 
   it('scopes employee request lists to the authenticated employee', async () => {
@@ -51,8 +60,8 @@ describe('OfficeAutomationService access boundaries', () => {
     );
   });
 
-  it('allows managers to list another requester', async () => {
-    prisma.userModuleAccess.findUnique.mockResolvedValue({ permissions: ['OFFICE_VIEW', 'OFFICE_REQUEST_MANAGE'] });
+  it('allows managers to list another requester with request-edit permission', async () => {
+    prisma.userModuleAccess.findUnique.mockResolvedValue({ permissions: ['OFFICE_REQUEST_VIEW', 'OFFICE_REQUEST_EDIT'] });
 
     await service.list('employee-2', 'manager-1');
 
@@ -70,13 +79,18 @@ describe('OfficeAutomationService access boundaries', () => {
   it('scopes employee task lists to assigned tasks', async () => {
     await service.listTasks('employee-1', 'employee-2');
 
+    expect(users.assertModuleAccess).toHaveBeenCalledWith(
+      'employee-1',
+      'OFFICE_AUTOMATION',
+      'OFFICE_TASK_VIEW',
+    );
     expect(prisma.officeTask.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { assigneeId: 'employee-1' } }),
     );
   });
 
   it('allows a manager to filter tasks by assignee', async () => {
-    prisma.userModuleAccess.findUnique.mockResolvedValue({ permissions: ['OFFICE_VIEW', 'OFFICE_REQUEST_MANAGE'] });
+    prisma.userModuleAccess.findUnique.mockResolvedValue({ permissions: ['OFFICE_REQUEST_VIEW', 'OFFICE_REQUEST_EDIT'] });
 
     await service.listTasks('manager-1', 'employee-2');
 
