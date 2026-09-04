@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min, MinLength } from 'class-validator';
 import { Role } from '@prisma/client';
 
 export class CreateEmployeeDto {
@@ -29,6 +29,15 @@ export class CreateEmployeeDto {
   @IsOptional()
   @IsString()
   position?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  leaveQuota?: number;
 
   @IsOptional()
   @IsString()
