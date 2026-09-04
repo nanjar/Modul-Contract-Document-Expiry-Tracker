@@ -7,47 +7,104 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role { SUPERUSER EDITOR VIEWER }
-enum ModuleKey { CONTRACT_DOCUMENT OFFICE_AUTOMATION }
-enum OfficeRequestStatus { PENDING APPROVED REJECTED CANCELLED IN_PROGRESS COMPLETED }
-enum OfficeRequestType { LEAVE ATTENDANCE GENERAL LATE WFH OVERTIME REIMBURSEMENT BUSINESS_TRIP MEETING ASSET ANNOUNCEMENT }
-enum IntegrationEventStatus { PENDING PROCESSING DELIVERED FAILED }
-enum AttendanceStatus { PRESENT LATE ABSENT LEAVE WFH OFF }
-enum AttendanceAction { CHECK_IN CHECK_OUT }
-enum AnnouncementStatus { DRAFT PUBLISHED ARCHIVED }
-enum AnnouncementRecipientType { ALL ROLE USER }
+enum Role {
+  SUPERUSER
+  EDITOR
+  VIEWER
+}
+
+enum ModuleKey {
+  CONTRACT_DOCUMENT
+  OFFICE_AUTOMATION
+}
+
+enum OfficeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum OfficeRequestType {
+  LEAVE
+  ATTENDANCE
+  GENERAL
+  LATE
+  WFH
+  OVERTIME
+  REIMBURSEMENT
+  BUSINESS_TRIP
+  MEETING
+  ASSET
+  ANNOUNCEMENT
+}
+
+enum IntegrationEventStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  FAILED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  LEAVE
+  WFH
+  OFF
+}
+
+enum AttendanceAction {
+  CHECK_IN
+  CHECK_OUT
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AnnouncementRecipientType {
+  ALL
+  ROLE
+  USER
+}
 
 model User {
-  id String @id @default(uuid()) @db.Uuid
-  email String @unique
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
   passwordHash String
-  name String
-  role Role @default(VIEWER)
-  isActive Boolean @default(true)
+  name         String
+  role         Role     @default(VIEWER)
+  isActive     Boolean  @default(true)
   employeeNumber String? @unique
-  department String?
-  position String?
-  phone String?
-  leaveQuota Int @default(12)
+  department     String?
+  position       String?
+  phone         String?
+  leaveQuota    Int      @default(12)
   managerId String? @db.Uuid
-  manager User? @relation("UserManager", fields: [managerId], references: [id], onDelete: SetNull)
-  reports User[] @relation("UserManager")
+  manager   User?   @relation("UserManager", fields: [managerId], references: [id], onDelete: SetNull)
+  reports   User[]  @relation("UserManager")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  documents Document[] @relation("DocumentOwner")
-  createdDocs Document[] @relation("DocumentCreator")
-  audits AuditLog[]
-  moduleAccess UserModuleAccess[]
+  documents          Document[]             @relation("DocumentOwner")
+  createdDocs        Document[]             @relation("DocumentCreator")
+  audits             AuditLog[]
+  moduleAccess       UserModuleAccess[]
   telegramIdentities UserTelegramIdentity[]
-  officeRequests OfficeRequest[] @relation("OfficeRequester")
-  assignedTasks OfficeTask[] @relation("OfficeTaskAssignee")
-  approvals OfficeApproval[] @relation("OfficeApprover")
-  attendanceRecords AttendanceRecord[]
-  attendanceActions AttendanceActionLog[]
-  announcements Announcement[] @relation("AnnouncementCreator")
-  announcementReads AnnouncementReadReceipt[]
-  meetingsCreated MeetingBooking[] @relation("MeetingCreator")
-  meetingAttendees MeetingAttendee[]
+  officeRequests     OfficeRequest[]         @relation("OfficeRequester")
+  assignedTasks      OfficeTask[]            @relation("OfficeTaskAssignee")
+  approvals          OfficeApproval[]        @relation("OfficeApprover")
+  attendanceRecords  AttendanceRecord[]
+  attendanceActions  AttendanceActionLog[]
+  announcements      Announcement[]          @relation("AnnouncementCreator")
+  announcementReads  AnnouncementReadReceipt[]
+  meetingsCreated    MeetingBooking[]        @relation("MeetingCreator")
+  meetingAttendees   MeetingAttendee[]
   officeAttachmentsUploaded OfficeRequestAttachment[] @relation("OfficeAttachmentUploader")
 }
 
