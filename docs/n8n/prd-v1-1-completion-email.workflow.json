@@ -29,21 +29,15 @@
           "conditions": [
             {
               "id": "event",
-              "leftValue": "={{ $json.event }}",
+              "leftValue": "={{ $json.body.event }}",
               "rightValue": "PRD_V1_1_COMPLETE",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
+              "operator": {"type": "string", "operation": "equals"}
             },
             {
               "id": "recipient",
-              "leftValue": "={{ $json.recipientEmail }}",
+              "leftValue": "={{ $json.body.recipientEmail }}",
               "rightValue": "nanjar.budiman@gmail.com",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
+              "operator": {"type": "string", "operation": "equals"}
             }
           ],
           "combinator": "and"
@@ -59,23 +53,19 @@
       "parameters": {
         "method": "POST",
         "url": "https://api.resend.com/emails",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Idempotency-Key",
-              "value": "={{ $json.idempotencyKey }}"
-            }
+            {"name": "Content-Type", "value": "application/json"},
+            {"name": "Idempotency-Key", "value": "={{ $json.body.idempotencyKey }}"}
           ]
         },
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ from: 'nanjar.budiman@gmail.com', to: [$json.recipientEmail], subject: 'Contract & Document Expiry Tracker — PRD v1.1 Complete', text: 'PRD v1.1 automated completion gate has passed.\\n\\nRepository: ' + $json.repository + '\\nBranch: ' + $json.branch + '\\nCommit: ' + $json.commit + '\\nWorkflow run: ' + $json.workflowRunUrl + '\\n\\nAll CI checks associated with the completion gate passed. Please proceed with the final manual acceptance test.' }) }}",
+        "body": "={{ JSON.stringify({ from: 'nanjar.budiman@gmail.com', to: [$json.body.recipientEmail], subject: 'Contract & Document Expiry Tracker — PRD v1.1 Complete', text: 'PRD v1.1 automated completion gate has passed.\\n\\nRepository: ' + $json.body.repository + '\\nBranch: ' + $json.body.branch + '\\nCommit: ' + $json.body.commit + '\\nWorkflow run: ' + $json.body.workflowRunUrl + '\\n\\nAll CI checks associated with the completion gate passed. Please proceed with the final manual acceptance test.' }) }}",
         "options": {}
       },
       "id": "send-completion-email",
@@ -89,9 +79,7 @@
       "parameters": {
         "respondWith": "json",
         "responseBody": "={\"ok\":true,\"accepted\":true}",
-        "options": {
-          "responseCode": 200
-        }
+        "options": {"responseCode": 200}
       },
       "id": "respond-ok",
       "name": "Respond OK",
@@ -103,9 +91,7 @@
       "parameters": {
         "respondWith": "json",
         "responseBody": "={\"ok\":false,\"error\":\"Unauthorized\"}",
-        "options": {
-          "responseCode": 401
-        }
+        "options": {"responseCode": 401}
       },
       "id": "respond-unauthorized",
       "name": "Respond Unauthorized",
@@ -117,9 +103,7 @@
       "parameters": {
         "respondWith": "json",
         "responseBody": "={\"ok\":false,\"error\":\"Invalid completion event\"}",
-        "options": {
-          "responseCode": 400
-        }
+        "options": {"responseCode": 400}
       },
       "id": "respond-invalid",
       "name": "Respond Invalid Event",
@@ -129,54 +113,13 @@
     }
   ],
   "connections": {
-    "GitHub Completion Webhook": {
-      "main": [
-        [
-          {
-            "node": "Validate Completion Event",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Validate Completion Event": {
-      "main": [
-        [
-          {
-            "node": "Send Completion Email via Resend",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Respond Invalid Event",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Send Completion Email via Resend": {
-      "main": [
-        [
-          {
-            "node": "Respond OK",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
+    "GitHub Completion Webhook": {"main": [[{"node": "Validate Completion Event", "type": "main", "index": 0}]]},
+    "Validate Completion Event": {"main": [[{"node": "Send Completion Email via Resend", "type": "main", "index": 0}], [{"node": "Respond Invalid Event", "type": "main", "index": 0}]]},
+    "Send Completion Email via Resend": {"main": [[{"node": "Respond OK", "type": "main", "index": 0}]]}
   },
   "active": false,
-  "settings": {
-    "executionOrder": "v1"
-  },
+  "settings": {"executionOrder": "v1"},
   "pinData": {},
-  "meta": {
-    "templateCredsSetupCompleted": false
-  },
+  "meta": {"templateCredsSetupCompleted": false},
   "tags": []
 }
