@@ -14,6 +14,8 @@ const employeeSelect = {
   employeeNumber: true,
   department: true,
   position: true,
+  phone: true,
+  leaveQuota: true,
   managerId: true,
   createdAt: true,
   updatedAt: true,
@@ -28,10 +30,7 @@ export class EmployeesService {
   ) {}
 
   async list() {
-    const items = await this.prisma.user.findMany({
-      orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
-      select: employeeSelect,
-    });
+    const items = await this.prisma.user.findMany({ orderBy: [{ isActive: 'desc' }, { name: 'asc' }], select: employeeSelect });
     return { items };
   }
 
@@ -49,112 +48,57 @@ export class EmployeesService {
     return employee;
   }
 
-  async me(id: string) {
-    return this.findOne(id);
-  }
+  async me(id: string) { return this.findOne(id); }
 
   async create(input: {
-    email: string;
-    name: string;
-    password: string;
-    role: Role;
-    employeeNumber?: string;
-    department?: string;
-    position?: string;
-    managerId?: string;
-    actorId: string;
+    email: string; name: string; password: string; role: Role; employeeNumber?: string;
+    department?: string; position?: string; phone?: string; leaveQuota?: number; managerId?: string; actorId: string;
   }) {
     const email = input.email.toLowerCase().trim();
     const employeeNumber = input.employeeNumber?.trim() || undefined;
-
     const existingEmail = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (existingEmail) throw new ConflictException('Email is already registered');
-
     if (employeeNumber) {
       const existingNumber = await this.prisma.user.findUnique({ where: { employeeNumber }, select: { id: true } });
       if (existingNumber) throw new ConflictException('Employee number is already registered');
     }
-
     await this.validateManager(input.managerId);
+    const leaveQuota = input.leaveQuota ?? 12;
+    if (!Number.isInteger(leaveQuota) || leaveQuota < 0) throw new ConflictException('Leave quota must be a non-negative integer');
     const passwordHash = await argon2.hash(input.password);
-
     try {
-      const employee = await this.prisma.$transaction(async (tx) => {
-        const created = await tx.user.create({
-          data: {
-            email,
-            name: input.name.trim(),
-            passwordHash,
-            role: input.role,
-            employeeNumber,
-            department: input.department?.trim() || undefined,
-            position: input.position?.trim() || undefined,
-            managerId: input.managerId || undefined,
-            moduleAccess: {
-              create: [
-                {
-                  module: ModuleKey.CONTRACT_DOCUMENT,
-                  permissions: defaultPermissions(ModuleKey.CONTRACT_DOCUMENT, input.role),
-                },
-                {
-                  module: ModuleKey.OFFICE_AUTOMATION,
-                  permissions: defaultPermissions(ModuleKey.OFFICE_AUTOMATION, input.role),
-                },
-              ],
-            },
-          },
-          select: employeeSelect,
-        });
-        return created;
-      });
-
-      await this.audit.log({
-        actorId: input.actorId,
-        action: 'CREATE',
-        entity: 'Employee',
-        entityId: employee.id,
-        metadata: { email: employee.email, employeeNumber: employee.employeeNumber, role: employee.role },
-      });
-
+      const employee = await this.prisma.$transaction(async (tx) => tx.user.create({
+        data: {
+          email, name: input.name.trim(), passwordHash, role: input.role, employeeNumber,
+          department: input.department?.trim() || undefined, position: input.position?.trim() || undefined,
+          phone: input.phone?.trim() || undefined, leaveQuota, managerId: input.managerId || undefined,
+          moduleAccess: { create: [
+            { module: ModuleKey.CONTRACT_DOCUMENT, permissions: defaultPermissions(ModuleKey.CONTRACT_DOCUMENT, input.role) },
+            { module: ModuleKey.OFFICE_AUTOMATION, permissions: defaultPermissions(ModuleKey.OFFICE_AUTOMATION, input.role) },
+          ] },
+        }, select: employeeSelect,
+      }));
+      await this.audit.log({ actorId: input.actorId, action: 'CREATE', entity: 'Employee', entityId: employee.id,
+        metadata: { email: employee.email, employeeNumber: employee.employeeNumber, role: employee.role } });
       return employee;
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        throw new ConflictException('Employee email or employee number is already registered');
-      }
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('Employee email or employee number is already registered');
       throw error;
     }
   }
 
   async update(id: string, input: {
-    name?: string;
-    password?: string;
-    role?: Role;
-    employeeNumber?: string;
-    department?: string;
-    position?: string;
-    managerId?: string | null;
-    isActive?: boolean;
+    name?: string; password?: string; role?: Role; employeeNumber?: string; department?: string;
+    position?: string; phone?: string; leaveQuota?: number; managerId?: string | null; isActive?: boolean;
   }, actorId: string) {
     const existing = await this.prisma.user.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Employee not found');
-
-    if (existing.id === actorId && input.isActive === false) {
-      throw new ConflictException('You cannot deactivate your own account');
-    }
-
-    if (existing.id === actorId && input.role !== undefined && input.role !== existing.role) {
-      throw new ConflictException('You cannot change your own role');
-    }
-
-    const removingSuperuserAccess =
-      existing.role === Role.SUPERUSER &&
-      existing.isActive &&
-      ((input.role !== undefined && input.role !== Role.SUPERUSER) || input.isActive === false);
+    if (existing.id === actorId && input.isActive === false) throw new ConflictException('You cannot deactivate your own account');
+    if (existing.id === actorId && input.role !== undefined && input.role !== existing.role) throw new ConflictException('You cannot change your own role');
+    const removingSuperuserAccess = existing.role === Role.SUPERUSER && existing.isActive && ((input.role !== undefined && input.role !== Role.SUPERUSER) || input.isActive === false);
     if (removingSuperuserAccess) await this.assertNotLastActiveSuperuser(id);
-
     if (input.managerId === id) throw new ConflictException('An employee cannot be their own manager');
     await this.validateManager(input.managerId ?? undefined);
-
     if (input.employeeNumber !== undefined && input.employeeNumber !== existing.employeeNumber) {
       const number = input.employeeNumber.trim();
       if (number) {
@@ -162,56 +106,35 @@ export class EmployeesService {
         if (duplicate) throw new ConflictException('Employee number is already registered');
       }
     }
-
+    if (input.leaveQuota !== undefined && (!Number.isInteger(input.leaveQuota) || input.leaveQuota < 0)) throw new ConflictException('Leave quota must be a non-negative integer');
     const passwordHash = input.password ? await argon2.hash(input.password) : undefined;
-    const employee = await this.prisma.user.update({
-      where: { id },
-      data: {
-        ...(input.name !== undefined ? { name: input.name.trim() } : {}),
-        ...(input.role !== undefined ? { role: input.role } : {}),
-        ...(input.employeeNumber !== undefined ? { employeeNumber: input.employeeNumber.trim() || null } : {}),
-        ...(input.department !== undefined ? { department: input.department.trim() || null } : {}),
-        ...(input.position !== undefined ? { position: input.position.trim() || null } : {}),
-        ...(input.managerId !== undefined ? { managerId: input.managerId || null } : {}),
-        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
-        ...(passwordHash !== undefined ? { passwordHash } : {}),
-      },
-      select: employeeSelect,
-    });
-
+    const employee = await this.prisma.user.update({ where: { id }, data: {
+      ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+      ...(input.role !== undefined ? { role: input.role } : {}),
+      ...(input.employeeNumber !== undefined ? { employeeNumber: input.employeeNumber.trim() || null } : {}),
+      ...(input.department !== undefined ? { department: input.department.trim() || null } : {}),
+      ...(input.position !== undefined ? { position: input.position.trim() || null } : {}),
+      ...(input.phone !== undefined ? { phone: input.phone.trim() || null } : {}),
+      ...(input.leaveQuota !== undefined ? { leaveQuota: input.leaveQuota } : {}),
+      ...(input.managerId !== undefined ? { managerId: input.managerId || null } : {}),
+      ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      ...(passwordHash !== undefined ? { passwordHash } : {}),
+    }, select: employeeSelect });
     if (input.role !== undefined && input.role !== existing.role) {
-      const moduleAccess = await this.prisma.userModuleAccess.findMany({
-        where: { userId: id },
-        select: { id: true, module: true, permissions: true },
-      });
+      const moduleAccess = await this.prisma.userModuleAccess.findMany({ where: { userId: id }, select: { id: true, module: true, permissions: true } });
       for (const access of moduleAccess) {
         const nextPermissions = defaultPermissions(access.module, input.role);
-        if (nextPermissions.join('|') !== access.permissions.join('|')) {
-          await this.prisma.userModuleAccess.update({
-            where: { id: access.id },
-            data: { permissions: nextPermissions },
-          });
-        }
+        if (nextPermissions.join('|') !== access.permissions.join('|')) await this.prisma.userModuleAccess.update({ where: { id: access.id }, data: { permissions: nextPermissions } });
       }
     }
-
-    await this.audit.log({
-      actorId,
-      action: 'UPDATE',
-      entity: 'Employee',
-      entityId: employee.id,
-      metadata: {
-        previous: { employeeNumber: existing.employeeNumber, department: existing.department, position: existing.position, managerId: existing.managerId, role: existing.role, isActive: existing.isActive },
-        current: { employeeNumber: employee.employeeNumber, department: employee.department, position: employee.position, managerId: employee.managerId, role: employee.role, isActive: employee.isActive },
-      },
-    });
-
+    await this.audit.log({ actorId, action: 'UPDATE', entity: 'Employee', entityId: employee.id, metadata: {
+      previous: { employeeNumber: existing.employeeNumber, department: existing.department, position: existing.position, phone: existing.phone, leaveQuota: existing.leaveQuota, managerId: existing.managerId, role: existing.role, isActive: existing.isActive },
+      current: { employeeNumber: employee.employeeNumber, department: employee.department, position: employee.position, phone: employee.phone, leaveQuota: employee.leaveQuota, managerId: employee.managerId, role: employee.role, isActive: employee.isActive },
+    } });
     return employee;
   }
 
-  async deactivate(id: string, actorId: string) {
-    return this.update(id, { isActive: false }, actorId);
-  }
+  async deactivate(id: string, actorId: string) { return this.update(id, { isActive: false }, actorId); }
 
   private async validateManager(managerId?: string) {
     if (!managerId) return;
@@ -222,8 +145,6 @@ export class EmployeesService {
 
   private async assertNotLastActiveSuperuser(id: string) {
     const activeSuperusers = await this.prisma.user.count({ where: { role: Role.SUPERUSER, isActive: true } });
-    if (activeSuperusers <= 1) {
-      throw new ConflictException('At least one active superuser account must remain');
-    }
+    if (activeSuperusers <= 1) throw new ConflictException('At least one active superuser account must remain');
   }
 }
