@@ -64,6 +64,8 @@ Employee-specific `UserTelegramIdentity.chatId` remains the authoritative recipi
 
 The PRD v1.1 completion workflow uses n8n credentials for its sensitive authentication values rather than `$env` expressions. The GitHub webhook is protected by an n8n Header Auth credential backed by `N8N_WEBHOOK_SECRET`, and the Resend HTTP request uses the existing n8n Bearer Auth credential backed by `RESEND_API_KEY`. The sender address is non-secret configuration and is stored directly in the workflow body.
 
+Because n8n Webhook nodes expose the incoming request body under `$json.body`, the completion workflow must read completion fields from `$json.body.*` (for example, `$json.body.event`, `$json.body.recipientEmail`, and `$json.body.idempotencyKey`). HTTP headers remain under `$json.headers.*`.
+
 Credential secrets must never be committed to Git or exposed in logs. `N8N_BLOCK_ENV_ACCESS_IN_NODE` is therefore not required by the PRD v1.1 completion workflow itself.
 
 ## Failure rule
