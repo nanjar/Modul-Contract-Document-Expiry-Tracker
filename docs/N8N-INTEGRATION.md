@@ -60,6 +60,10 @@ Employee-specific `UserTelegramIdentity.chatId` remains the authoritative recipi
 - `OFFICE_REQUEST_REJECTED`
 - `OFFICE_TASK_ASSIGNED`
 
+## PRD v1.1 completion email
+
+The PRD v1.1 completion notification workflow uses the n8n environment variables `N8N_WEBHOOK_SECRET`, `RESEND_API_KEY`, and `PRD_COMPLETION_FROM_EMAIL`. Because n8n v2 blocks environment-variable access from expressions by default, the n8n deployment must explicitly set `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` when this workflow is used. Secret values must never be committed to Git or exposed in logs.
+
 ## Failure rule
 
 A failed n8n/Telegram delivery must never roll back or delete the underlying business transaction. PostgreSQL is authoritative.
