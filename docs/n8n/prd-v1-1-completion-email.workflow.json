@@ -6,6 +6,7 @@
         "httpMethod": "POST",
         "path": "prd-v1-1-complete",
         "responseMode": "responseNode",
+        "authentication": "headerAuth",
         "options": {}
       },
       "id": "prd-v1-1-webhook",
@@ -13,7 +14,8 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [-760, 0],
-      "webhookId": "prd-v1-1-complete"
+      "webhookId": "prd-v1-1-complete",
+      "notes": "Authentication is configured in the live n8n instance using Header Auth. Credential secrets are intentionally not stored in Git."
     },
     {
       "parameters": {
