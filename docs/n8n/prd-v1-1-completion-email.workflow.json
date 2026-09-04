@@ -65,7 +65,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ from: 'nanjar.budiman@gmail.com', to: [$json.body.recipientEmail], subject: 'Contract & Document Expiry Tracker — PRD v1.1 Complete', text: 'PRD v1.1 automated completion gate has passed.\\n\\nRepository: ' + $json.body.repository + '\\nBranch: ' + $json.body.branch + '\\nCommit: ' + $json.body.commit + '\\nWorkflow run: ' + $json.body.workflowRunUrl + '\\n\\nAll CI checks associated with the completion gate passed. Please proceed with the final manual acceptance test.' }) }}",
+        "body": "={{ JSON.stringify({ from: 'Contract Tracker <noreply@mail.nanjarbudiman.com>', to: [$json.body.recipientEmail], subject: 'Contract & Document Expiry Tracker — PRD v1.1 Complete', text: 'PRD v1.1 automated completion gate has passed.\\n\\nRepository: ' + $json.body.repository + '\\nBranch: ' + $json.body.branch + '\\nCommit: ' + $json.body.commit + '\\nWorkflow run: ' + $json.body.workflowRunUrl + '\\n\\nAll CI checks associated with the completion gate passed. Please proceed with the final manual acceptance test.' }) }}",
         "options": {}
       },
       "id": "send-completion-email",
@@ -73,7 +73,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [0, -80],
-      "notes": "Authentication is configured in the live n8n instance using the existing Bearer Auth credential. Credential secrets are intentionally not stored in Git."
+      "notes": "Authentication is configured in the live n8n instance using the existing Bearer Auth credential. The verified Resend sender is noreply@mail.nanjarbudiman.com. Credential secrets are intentionally not stored in Git."
     },
     {
       "parameters": {
