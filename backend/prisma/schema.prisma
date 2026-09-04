@@ -37,6 +37,8 @@ enum OfficeRequestType {
   REIMBURSEMENT
   BUSINESS_TRIP
   MEETING
+  ASSET
+  ANNOUNCEMENT
 }
 
 enum IntegrationEventStatus {
@@ -82,6 +84,8 @@ model User {
   employeeNumber String? @unique
   department     String?
   position       String?
+  phone         String?
+  leaveQuota    Int      @default(12)
   managerId String? @db.Uuid
   manager   User?   @relation("UserManager", fields: [managerId], references: [id], onDelete: SetNull)
   reports   User[]  @relation("UserManager")
@@ -358,7 +362,7 @@ model MeetingRoom {
 }
 
 model MeetingBooking {
-  id String @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @default(uuid())
   roomId String @db.Uuid
   createdById String @db.Uuid
   title String
