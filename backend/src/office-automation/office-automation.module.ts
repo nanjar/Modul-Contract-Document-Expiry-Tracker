@@ -11,11 +11,13 @@ import { OfficeAttachmentService } from './office-attachment.service';
 import { OfficeRequestRulesService } from './office-request-rules.service';
 import { AttendanceController } from './attendance.controller';
 import { AttendanceService } from './attendance.service';
+import { LegacyOfficeController } from './legacy-office.controller';
+import { LegacyOfficeService } from './legacy-office.service';
 
 @Module({
   imports: [AuthModule, AuditModule, PrismaModule, StorageModule, UsersModule],
-  controllers: [OfficeAutomationController, AttendanceController],
-  providers: [OfficeAutomationService, OfficeAutomationQueryService, OfficeAttachmentService, OfficeRequestRulesService, AttendanceService],
-  exports: [OfficeAutomationService, OfficeAutomationQueryService, OfficeAttachmentService, OfficeRequestRulesService, AttendanceService],
+  controllers: [OfficeAutomationController, AttendanceController, LegacyOfficeController],
+  providers: [OfficeAutomationService, OfficeAutomationQueryService, OfficeAttachmentService, OfficeRequestRulesService, AttendanceService, LegacyOfficeService],
+  exports: [OfficeAutomationService, OfficeAutomationQueryService, OfficeAttachmentService, OfficeRequestRulesService, AttendanceService, LegacyOfficeService],
 })
 export class OfficeAutomationModule {}
