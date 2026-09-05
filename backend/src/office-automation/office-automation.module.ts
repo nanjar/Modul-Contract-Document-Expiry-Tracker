@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { AuditModule } from '../audit/audit.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { StorageModule } from '../storage/storage.module';
 import { UsersModule } from '../users/users.module';
@@ -12,7 +13,7 @@ import { AttendanceController } from './attendance.controller';
 import { AttendanceService } from './attendance.service';
 
 @Module({
-  imports: [AuthModule, PrismaModule, StorageModule, UsersModule],
+  imports: [AuthModule, AuditModule, PrismaModule, StorageModule, UsersModule],
   controllers: [OfficeAutomationController, AttendanceController],
   providers: [OfficeAutomationService, OfficeAutomationQueryService, OfficeAttachmentService, OfficeRequestRulesService, AttendanceService],
   exports: [OfficeAutomationService, OfficeAutomationQueryService, OfficeAttachmentService, OfficeRequestRulesService, AttendanceService],
