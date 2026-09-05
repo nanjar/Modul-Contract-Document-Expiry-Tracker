@@ -23,4 +23,18 @@ describe('OfficeRequestRulesService', () => {
   it('accepts required fields for reimbursement', async () => {
     await expect(service.validate('REIMBURSEMENT' as any, { amount: 250000, description: 'Taxi' })).resolves.toBeUndefined();
   });
+
+  it('requires overtime date, times, and reason', async () => {
+    await expect(service.validate('OVERTIME' as any, { reason: 'Deadline' }, { startDate: '2026-09-05T18:00:00.000Z' })).rejects.toThrow('Overtime start time is required');
+    await expect(service.validate('OVERTIME' as any, { startTime: '20:00', endTime: '18:00', reason: 'Deadline' }, { startDate: '2026-09-05T18:00:00.000Z' })).rejects.toThrow('Overtime end time must be after start time');
+  });
+
+  it('requires a date for WFH', async () => {
+    await expect(service.validate('WFH' as any, { location: 'Home', reason: 'Internet repair' })).rejects.toThrow('WFH date is required');
+  });
+
+  it('requires a date range for business trip and meeting', async () => {
+    await expect(service.validate('BUSINESS_TRIP' as any, { destination: 'Bandung', pic: 'HR' }, {})).rejects.toThrow('Business trip start date is required');
+    await expect(service.validate('MEETING' as any, { roomId: 'Room A', participants: 'employee@example.com' }, { startDate: '2026-09-05T10:00:00.000Z' })).rejects.toThrow('Meeting end date is required');
+  });
 });
